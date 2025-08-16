@@ -398,27 +398,15 @@ $requests = $laundryRequest->getStudentRequests($_SESSION['user_id']);
 
                 <!-- Status Timeline -->
                 <div class="timeline">
-                    <div class="timeline-item <?php echo in_array($request['status'], ['pending', 'picked_up', 'in_progress', 'ready', 'delivered']) ? 'completed' : ''; ?>">
+                    <div class="timeline-item <?php echo in_array($request['status'], ['submitted','processing','delivered']) ? 'completed' : ''; ?>">
                         <small class="text-muted">Request Submitted</small>
                         <div><?php echo date('M j, Y g:i A', strtotime($request['created_at'])); ?></div>
                     </div>
-                    
-                    <div class="timeline-item <?php echo in_array($request['status'], ['picked_up', 'in_progress', 'ready', 'delivered']) ? 'completed' : ($request['status'] == 'pending' ? 'current' : ''); ?>">
-                        <small class="text-muted">Pickup Scheduled</small>
-                        <div><?php echo $request['status'] == 'pending' ? 'Waiting for pickup' : 'Picked up'; ?></div>
-                    </div>
-                    
-                    <div class="timeline-item <?php echo in_array($request['status'], ['in_progress', 'ready', 'delivered']) ? 'completed' : ($request['status'] == 'picked_up' ? 'current' : ''); ?>">
+                    <div class="timeline-item <?php echo in_array($request['status'], ['processing','delivered']) ? 'completed' : ($request['status'] == 'submitted' ? 'current' : ''); ?>">
                         <small class="text-muted">Processing</small>
-                        <div><?php echo in_array($request['status'], ['in_progress', 'ready', 'delivered']) ? 'In progress' : 'Waiting'; ?></div>
+                        <div><?php echo in_array($request['status'], ['processing','delivered']) ? 'In progress' : 'Waiting'; ?></div>
                     </div>
-                    
-                    <div class="timeline-item <?php echo in_array($request['status'], ['ready', 'delivered']) ? 'completed' : ($request['status'] == 'in_progress' ? 'current' : ''); ?>">
-                        <small class="text-muted">Ready for Delivery</small>
-                        <div><?php echo in_array($request['status'], ['ready', 'delivered']) ? 'Ready' : 'Processing'; ?></div>
-                    </div>
-                    
-                    <div class="timeline-item <?php echo $request['status'] == 'delivered' ? 'completed' : ($request['status'] == 'ready' ? 'current' : ''); ?>">
+                    <div class="timeline-item <?php echo $request['status'] == 'delivered' ? 'completed' : ($request['status'] == 'processing' ? 'current' : ''); ?>">
                         <small class="text-muted">Delivered</small>
                         <div><?php echo $request['status'] == 'delivered' ? 'Completed' : 'Pending'; ?></div>
                     </div>

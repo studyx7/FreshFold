@@ -6,22 +6,72 @@ requireUserType('student');
 $error = '';
 $success = '';
 
-if($_POST) {
-    $database = new Database();
-    $db = $database->getConnection();
-    $laundryRequest = new LaundryRequest($db);
-    
-    $pickup_date = $_POST['pickup_date'];
+// Get student gender
+$database = new Database();
+$db = $database->getConnection();
+$user = new User($db);
+$current_user = $user->getUserById($_SESSION['user_id']);
+$gender = $current_user['gender'] ?? 'male'; // fallback to male
+
+// Define laundry items for boys and girls
+$boy_items = [
+    "Shirt", "Pants", "Jeans", "T. Shirts", "Play Pant", "Bermuda", "Inner (Ban)", "Bedsheet", "Blanket", "Lunkey", "Over Coat", "Thorth", "Turkey", "Pillow", "Sweater"
+];
+$girl_items = [
+    "Churidar Top", "Churidar Pant", "Churidar Shalls", "Pants", "Shirts", "T. Shirts", "Over Coat", "Top", "Play Pant", "Bermuda", "Saree", "Midi", "Turkey", "Thorth", "Sweates", "Bedsheet", "Blanket", "Pillow", "Shimmies"
+];
+
+// Calculate pickup date logic
+function getPickupDate($db) {
+    $today = date('Y-m-d');
+    // Count requests for today
+    $stmt = $db->prepare("SELECT COUNT(*) FROM laundry_requests WHERE created_at >= ? AND created_at < ?");
+    $stmt->execute([
+        $today . " 00:00:00",
+        $today . " 23:59:59"
+    ]);
+    $today_requests = $stmt->fetchColumn();
+
+    // If more than 30 requests today, add 4 days, else 3 days
+    $days_to_add = ($today_requests >= 30) ? 4 : 3;
+    $pickup_date = date('Y-m-d', strtotime("+$days_to_add days"));
+
+    // If pickup date is Sunday, move to Monday
+    while (date('w', strtotime($pickup_date)) == 0) {
+        $pickup_date = date('Y-m-d', strtotime($pickup_date . ' +1 day'));
+    }
+    return $pickup_date;
+}
+
+$calculated_pickup_date = getPickupDate($db);
+
+// Handle form submission
+if($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $pickup_date = $_POST['pickup_date']; // hidden field, not editable
     $special_instructions = $_POST['special_instructions'] ?? '';
-    
-    // Validate pickup date (should be at least tomorrow)
-    $tomorrow = date('Y-m-d', strtotime('+1 day'));
-    if($pickup_date < $tomorrow) {
-        $error = 'Pickup date must be at least tomorrow.';
+    $items = $_POST['items'] ?? [];
+    $total_items = array_sum($items);
+
+    // Validate total items
+    if($total_items > 20) {
+        $error = 'You cannot submit more than 20 clothes in a single request.';
+    } elseif($total_items < 1) {
+        $error = 'Please enter at least one item.';
     } else {
+        // Create laundry request
+        $laundryRequest = new LaundryRequest($db);
         $request_id = $laundryRequest->createRequest($_SESSION['user_id'], $pickup_date, $special_instructions);
-        
+
         if($request_id) {
+            // Insert items
+            $item_names = ($gender === 'female') ? $girl_items : $boy_items;
+            foreach($items as $idx => $qty) {
+                $qty = intval($qty);
+                if($qty > 0 && isset($item_names[$idx])) {
+                    $stmt = $db->prepare("INSERT INTO laundry_items (request_id, item_type, quantity) VALUES (?, ?, ?)");
+                    $stmt->execute([$request_id, $item_names[$idx], $qty]);
+                }
+            }
             showAlert('Laundry request created successfully! Your request ID is #' . $request_id, 'success');
             redirect('my_requests_page.php');
         } else {
@@ -35,8 +85,8 @@ if($_POST) {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <title>New Laundry Request - FreshFold</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>New Request - FreshFold</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -48,7 +98,6 @@ if($_POST) {
             --gradient-1: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             --gradient-2: linear-gradient(135deg, var(--primary-color) 0%, #1e3d6f 100%);
         }
-
         body {
             background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
             background-size: 400% 400%;
@@ -56,14 +105,11 @@ if($_POST) {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             overflow-x: hidden;
         }
-
         @keyframes gradientShift {
             0% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
             100% { background-position: 0% 50%; }
         }
-
-        /* Floating particles background */
         .particles {
             position: fixed;
             top: 0;
@@ -85,8 +131,6 @@ if($_POST) {
             0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 1; }
             50% { transform: translateY(-20px) rotate(180deg); opacity: 0.8; }
         }
-
-        /* Sidebar with glassmorphism */
         .sidebar {
             position: fixed;
             top: 0;
@@ -194,8 +238,6 @@ if($_POST) {
         .sidebar .nav-link:hover i {
             transform: scale(1.2) rotate(5deg);
         }
-
-        /* Main content */
         .main-content {
             margin-left: var(--sidebar-width);
             padding: 20px;
@@ -203,107 +245,44 @@ if($_POST) {
             z-index: 10;
             position: relative;
         }
-
-        /* Animated info and form cards */
-        .info-card, .form-card {
-            background: rgba(255, 255, 255, 0.95);
+        .request-card {
+            background: rgba(255,255,255,0.95);
             backdrop-filter: blur(20px);
             border-radius: 20px;
-            padding: 25px 30px;
-            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 30px;
             margin-bottom: 30px;
-            position: relative;
-            overflow: hidden;
-            opacity: 0;
-            transform: translateY(20px);
-            transition: opacity 0.6s ease, transform 0.6s ease;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.08);
+            border: 1px solid rgba(255,255,255,0.3);
+            animation: fadeInUp 0.7s cubic-bezier(.39,.575,.565,1.000) both;
         }
-        .info-card.visible, .form-card.visible {
-            opacity: 1;
-            transform: translateY(0);
+        @keyframes fadeInUp {
+            0% { opacity: 0; transform: translateY(40px);}
+            100% { opacity: 1; transform: translateY(0);}
         }
-        .info-card::before, .form-card::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: conic-gradient(from 0deg, transparent, rgba(44, 90, 160, 0.07), transparent);
-            transition: transform 0.6s;
-            transform: rotate(0deg);
-        }
-        .info-card:hover::before, .form-card:hover::before {
-            transform: rotate(180deg);
-        }
-        .info-card:hover, .form-card:hover {
-            transform: translateY(-8px) scale(1.01);
-            box-shadow: 0 25px 50px rgba(0,0,0,0.15);
-            background: rgba(255, 255, 255, 1);
-        }
-
-        .service-item {
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 15px;
-            border-left: 4px solid var(--primary-color);
-        }
-
-        .form-control, .form-select {
-            border-radius: 10px;
-            border: 2px solid #e9ecef;
-            padding: 12px 16px;
-            font-size: 16px;
-            transition: all 0.3s ease;
-        }
-        .form-control:focus, .form-select:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 0.2rem rgba(44, 90, 160, 0.25);
-        }
+        .laundry-table th, .laundry-table td { text-align: center; vertical-align: middle; }
+        .laundry-table input[type="number"] { width: 60px; margin: 0 auto; }
+        .total-warning { color: #dc3545; font-weight: 600; }
         .btn-primary {
-            background: var(--gradient-2);
+            background: linear-gradient(90deg, #2c5aa0 60%, #23d5ab 100%);
             border: none;
-            border-radius: 10px;
-            padding: 12px 30px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-        .btn-primary::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 0;
-            height: 0;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            transition: width 0.6s, height 0.6s;
-        }
-        .btn-primary:hover::before {
-            width: 300px;
-            height: 300px;
+            border-radius: 14px;
+            padding: 13px 0;
+            font-weight: 700;
+            font-size: 17px;
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 12px 0 #23d5ab33;
+            transition: all 0.2s;
         }
         .btn-primary:hover {
-            background-color: #1e3d6f;
+            background: linear-gradient(90deg, #23d5ab 0%, #2c5aa0 100%);
             transform: translateY(-2px) scale(1.03);
-            color: white;
-            box-shadow: 0 8px 25px rgba(44, 90, 160, 0.15);
-        }
-        .btn-outline-secondary {
-            border-radius: 10px;
-            padding: 12px 30px;
-            font-weight: 600;
+            box-shadow: 0 6px 24px 0 #23d5ab33;
         }
         .alert {
-            border-radius: 10px;
+            border-radius: 12px;
             font-size: 1rem;
+            margin-bottom: 18px;
         }
-        /* Responsive design */
         @media (max-width: 768px) {
             .sidebar {
                 transform: translateX(-100%);
@@ -315,40 +294,14 @@ if($_POST) {
             .main-content {
                 margin-left: 0;
             }
-            .info-card, .form-card {
-                padding: 18px 8px;
-            }
             .particles {
                 display: none;
             }
         }
-        /* Custom scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: rgba(255,255,255,0.1);
-        }
-        ::-webkit-scrollbar-thumb {
-            background: rgba(255,255,255,0.3);
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(255,255,255,0.5);
-        }
     </style>
 </head>
 <body>
-
-<!-- Floating Particles Background -->
 <div class="particles" id="particles"></div>
-
-<!-- Mobile menu toggle -->
-<button class="btn btn-primary d-md-none position-fixed" style="top: 20px; left: 20px; z-index: 1001;" onclick="toggleSidebar()">
-    <i class="fas fa-bars"></i>
-</button>
-
-<!-- Sidebar -->
 <div class="sidebar" id="sidebar">
     <div class="brand">
         <i class="fas fa-tshirt fa-2x mb-2"></i>
@@ -377,120 +330,70 @@ if($_POST) {
         </a>
     </nav>
 </div>
-
-<!-- Main Content -->
 <div class="main-content">
-    <div class="container-fluid">
-        <div class="row">
-            <div class="col-12">
-                <h2 class="mb-4" style="color:white; text-shadow:2px 2px 8px rgba(44,90,160,0.2);">
-                    <i class="fas fa-plus-circle me-2"></i>Create New Laundry Request
-                </h2>
-                
-                <!-- Service Information -->
-                <div class="info-card">
-                    <div class="row">
-                        <div class="col-md-8">
-                            <h4><i class="fas fa-info-circle me-2"></i>Service Information</h4>
-                            <p class="mb-2">Standard laundry service includes washing, drying, and folding.</p>
-                            <p class="mb-0">Pickup and delivery are handled by our professional staff.</p>
-                        </div>
-                        <div class="col-md-4 text-center">
-                            <i class="fas fa-clock fa-3x mb-2 opacity-75"></i>
-                            <h5>3-Day Service</h5>
-                            <small>Standard turnaround time</small>
-                        </div>
-                    </div>
-                </div>
+    <div class="request-card">
+        <h2 class="mb-4"><i class="fas fa-plus-circle me-2"></i>New Laundry Request</h2>
+        <?php if($error): ?>
+            <div class="alert alert-danger"><?php echo $error; ?></div>
+        <?php endif; ?>
+        <?php if($success): ?>
+            <div class="alert alert-success"><?php echo $success; ?></div>
+        <?php endif; ?>
 
-                <!-- Request Form -->
-                <div class="form-card">
-                    <?php if($error): ?>
-                    <div class="alert alert-danger" role="alert">
-                        <i class="fas fa-exclamation-triangle me-2"></i><?php echo $error; ?>
-                    </div>
-                    <?php endif; ?>
-
-                    <form method="POST">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-4">
-                                    <label for="pickup_date" class="form-label">
-                                        <i class="fas fa-calendar me-2"></i>Preferred Pickup Date
-                                    </label>
-                                    <input type="date" class="form-control" id="pickup_date" name="pickup_date" 
-                                           min="<?php echo date('Y-m-d', strtotime('+1 day')); ?>" required>
-                                    <div class="form-text">Pickup will be scheduled between 9:00 AM - 5:00 PM</div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="mb-4">
-                                    <label class="form-label">
-                                        <i class="fas fa-info-circle me-2"></i>Your Information
-                                    </label>
-                                    <div class="bg-light p-3 rounded">
-                                        <strong><?php echo $_SESSION['full_name']; ?></strong><br>
-                                        <small class="text-muted">
-                                            Floor <?php echo $_SESSION['hostel_block']; ?> - Room <?php echo $_SESSION['room_number']; ?>
-                                        </small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="mb-4">
-                            <label for="special_instructions" class="form-label">
-                                <i class="fas fa-sticky-note me-2"></i>Special Instructions (Optional)
-                            </label>
-                            <textarea class="form-control" id="special_instructions" name="special_instructions" 
-                                      rows="4" placeholder="Any special care instructions for your laundry..."></textarea>
-                            <div class="form-text">
-                                Examples: Separate whites from colors, gentle cycle for delicates, air dry only, etc.
-                            </div>
-                        </div>
-
-                        <!-- Service Details -->
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="service-item">
-                                    <h6><i class="fas fa-tshirt me-2"></i>What's Included</h6>
-                                    <ul class="mb-0">
-                                        <li>Washing & Drying</li>
-                                        <li>Folding & Organizing</li>
-                                        <li>Free Pickup & Delivery</li>
-                                    </ul>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="service-item">
-                                    <h6><i class="fas fa-clock me-2"></i>Service Timeline</h6>
-                                    <ul class="mb-0">
-                                        <li>Day 1: Pickup from your room</li>
-                                        <li>Day 2-3: Washing & Processing</li>
-                                        <li>Day 4: Delivery to your room</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="text-center mt-4">
-                            <button type="submit" class="btn btn-primary btn-lg me-3">
-                                <i class="fas fa-paper-plane me-2"></i>Submit Request
-                            </button>
-                            <a href="dashboard_page.php" class="btn btn-outline-secondary btn-lg">
-                                <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
-                            </a>
-                        </div>
-                    </form>
-                </div>
+        <form method="POST" id="laundryForm" autocomplete="off">
+            <div class="mb-3">
+                <label class="form-label">Pickup Date</label>
+                <input type="text" class="form-control" value="<?php echo date('l, M j, Y', strtotime($calculated_pickup_date)); ?>" readonly>
+                <input type="hidden" name="pickup_date" value="<?php echo $calculated_pickup_date; ?>">
+                <div class="form-text text-success">Your pickup date is automatically set based on workload and holidays.</div>
             </div>
-        </div>
+            <div class="mb-3">
+                <label class="form-label">Laundry Items (Max 20 per request)</label>
+                <table class="table table-bordered laundry-table">
+                    <thead>
+                        <tr>
+                            <th>S/N</th>
+                            <th>Item</th>
+                            <th>Quantity</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php
+                    $items = ($gender === 'female') ? $girl_items : $boy_items;
+                    foreach($items as $i => $item): ?>
+                        <tr>
+                            <td><?php echo $i+1; ?></td>
+                            <td><?php echo htmlspecialchars($item); ?></td>
+                            <td>
+                                <input type="number" min="0" max="20" name="items[<?php echo $i; ?>]" value="0" class="form-control item-qty" required>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <th colspan="2">TOTAL</th>
+                            <th><span id="totalQty">0</span></th>
+                        </tr>
+                    </tfoot>
+                </table>
+                <div id="totalWarning" class="total-warning"></div>
+            </div>
+            <div class="mb-3">
+                <label for="special_instructions" class="form-label">Special Instructions (Optional)</label>
+                <textarea class="form-control" id="special_instructions" name="special_instructions" rows="3"></textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary btn-lg flex-fill">
+                    Submit Request
+                </button>
+                <a href="dashboard_page.php" class="btn btn-outline-secondary btn-lg flex-fill">Cancel</a>
+            </div>
+        </form>
     </div>
 </div>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
 <script>
-// Floating particles effect
 function createParticles() {
     const particlesContainer = document.getElementById('particles');
     const particleCount = 20;
@@ -506,29 +409,43 @@ function createParticles() {
 }
 createParticles();
 
-// Toggle sidebar for mobile
-function toggleSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    sidebar.classList.toggle('show');
-}
+const qtyInputs = document.querySelectorAll('.item-qty');
+const totalQty = document.getElementById('totalQty');
+const totalWarning = document.getElementById('totalWarning');
+const form = document.getElementById('laundryForm');
 
-// Animate cards on scroll
-function addScrollAnimations() {
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                entry.target.classList.add('visible');
-            }
-        });
-    }, { threshold: 0.2 });
-    document.querySelectorAll('.info-card, .form-card').forEach(el => {
-        observer.observe(el);
+function updateTotal() {
+    let total = 0;
+    qtyInputs.forEach(input => {
+        let val = parseInt(input.value) || 0;
+        total += val;
     });
+    totalQty.textContent = total;
+    if (total > 20) {
+        totalWarning.textContent = "You cannot submit more than 20 clothes in a single request.";
+    } else {
+        totalWarning.textContent = "";
+    }
 }
-addScrollAnimations();
 
-// Set minimum date to tomorrow
-document.getElementById('pickup_date').min = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+qtyInputs.forEach(input => {
+    input.addEventListener('input', updateTotal);
+});
+
+form.addEventListener('submit', function(e) {
+    let total = 0;
+    qtyInputs.forEach(input => {
+        let val = parseInt(input.value) || 0;
+        total += val;
+    });
+    if (total > 20) {
+        totalWarning.textContent = "You cannot submit more than 20 clothes in a single request.";
+        e.preventDefault();
+    } else if (total < 1) {
+        totalWarning.textContent = "Please enter at least one item.";
+        e.preventDefault();
+    }
+});
 </script>
 </body>
 </html>

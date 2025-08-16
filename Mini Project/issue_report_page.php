@@ -12,7 +12,7 @@ $laundryRequest = new LaundryRequest($db);
 // Get user's active requests for the dropdown
 $user_requests = $laundryRequest->getStudentRequests($_SESSION['user_id']);
 $active_requests = array_filter($user_requests, function($request) {
-    return in_array($request['status'], ['pending', 'picked_up', 'in_progress', 'ready']);
+    return in_array($request['status'], ['submitted', 'processing']);
 });
 
 // Handle form submission

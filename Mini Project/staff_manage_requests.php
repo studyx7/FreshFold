@@ -12,12 +12,29 @@ $database = new Database();
 $db = $database->getConnection();
 $laundryRequest = new LaundryRequest($db);
 
-// Handle status updates
+// Handle status updates and return date update
 if($_POST && isset($_POST['update_status'])) {
     $request_id = $_POST['request_id'];
     $new_status = $_POST['new_status'];
     $remarks = $_POST['remarks'] ?? '';
-    
+    $new_return_date = $_POST['return_date'] ?? null;
+
+    // Validate return date if provided
+    if ($new_return_date) {
+        // Get the request's pickup date
+        $stmt = $db->prepare("SELECT pickup_date FROM laundry_requests WHERE request_id = ?");
+        $stmt->execute([$request_id]);
+        $pickup_date = $stmt->fetchColumn();
+
+        if (strtotime($new_return_date) < strtotime($pickup_date)) {
+            showAlert('Return date cannot be earlier than the pickup date.', 'danger');
+        } else {
+            // Update return date (expected_delivery)
+            $stmt = $db->prepare("UPDATE laundry_requests SET expected_delivery = ? WHERE request_id = ?");
+            $stmt->execute([$new_return_date, $request_id]);
+        }
+    }
+
     if($laundryRequest->updateStatus($request_id, $new_status, $_SESSION['user_id'], $remarks)) {
         showAlert('Request status updated successfully!', 'success');
     } else {
@@ -43,10 +60,8 @@ if($search) {
 
 // Status options
 $status_options = [
-    'pending' => 'Pending Pickup',
-    'picked_up' => 'Picked Up',
-    'in_progress' => 'In Progress',
-    'ready' => 'Ready for Delivery',
+    'submitted' => 'Request Submitted',
+    'processing' => 'Processing',
     'delivered' => 'Delivered'
 ];
 ?>
@@ -171,10 +186,8 @@ $status_options = [
             50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
-        .status-pending { background-color: #fff3cd; color: #856404; }
-        .status-picked_up { background-color: #cff4fc; color: #087990; }
-        .status-in_progress { background-color: #d1ecf1; color: #0c5460; }
-        .status-ready { background-color: #d4edda; color: #155724; }
+        .status-submitted { background-color: #fff3cd; color: #856404; }
+        .status-processing { background-color: #d1ecf1; color: #0c5460; }
         .status-delivered { background-color: #e2e3e5; color: #41464b; }
         .filters-card {
             background: white;
@@ -262,39 +275,23 @@ $status_options = [
 
     <!-- Quick Stats -->
     <div class="row mb-4">
-        <div class="col-md-2">
+        <div class="col-md-4">
             <div class="card text-center stat-card">
                 <div class="card-body">
-                    <h5 class="stat-number" data-target="<?php echo count(array_filter($all_requests, fn($r) => $r['status'] === 'pending')); ?>">0</h5>
-                    <small class="text-muted stat-label">Pending</small>
+                    <h5 class="stat-number" data-target="<?php echo count(array_filter($all_requests, fn($r) => $r['status'] === 'submitted')); ?>">0</h5>
+                    <small class="text-muted stat-label">Submitted</small>
                 </div>
             </div>
         </div>
-        <div class="col-md-2">
+        <div class="col-md-4">
             <div class="card text-center stat-card">
                 <div class="card-body">
-                    <h5 class="stat-number" data-target="<?php echo count(array_filter($all_requests, fn($r) => $r['status'] === 'picked_up')); ?>">0</h5>
-                    <small class="text-muted stat-label">Picked Up</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="card text-center stat-card">
-                <div class="card-body">
-                    <h5 class="stat-number" data-target="<?php echo count(array_filter($all_requests, fn($r) => $r['status'] === 'in_progress')); ?>">0</h5>
+                    <h5 class="stat-number" data-target="<?php echo count(array_filter($all_requests, fn($r) => $r['status'] === 'processing')); ?>">0</h5>
                     <small class="text-muted stat-label">Processing</small>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card text-center stat-card">
-                <div class="card-body">
-                    <h5 class="stat-number" data-target="<?php echo count(array_filter($all_requests, fn($r) => $r['status'] === 'ready')); ?>">0</h5>
-                    <small class="text-muted stat-label">Ready</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
+        <div class="col-md-4">
             <div class="card text-center stat-card">
                 <div class="card-body">
                     <h5 class="stat-number" data-target="<?php echo count(array_filter($all_requests, fn($r) => $r['status'] === 'delivered')); ?>">0</h5>
@@ -329,7 +326,7 @@ $status_options = [
                     </tr>
                     <?php else: ?>
                     <?php foreach($all_requests as $request): ?>
-                    <tr class="request-row" style="opacity:0;transform:translateY(30px);transition:opacity 0.6s,transform 0.6s;">
+                    <tr class="request-row" data-request-id="<?php echo $request['request_id']; ?>" data-return-date="<?php echo $request['expected_delivery']; ?>" data-pickup-date="<?php echo $request['pickup_date']; ?>" style="opacity:0;transform:translateY(30px);transition:opacity 0.6s,transform 0.6s;">
                         <td><strong>#<?php echo $request['request_id']; ?></strong></td>
                         <td><?php echo $request['bag_number']; ?></td>
                         <td>
@@ -372,12 +369,12 @@ $status_options = [
                 <div class="modal-body">
                     <input type="hidden" name="request_id" id="modal_request_id">
                     <input type="hidden" name="update_status" value="1">
-                    
+
                     <div class="mb-3">
                         <label class="form-label">Request Details</label>
                         <div id="request_details" class="bg-light p-3 rounded"></div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="new_status" class="form-label">New Status</label>
                         <select class="form-select" name="new_status" id="new_status" required>
@@ -386,7 +383,13 @@ $status_options = [
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    
+
+                    <div class="mb-3">
+                        <label for="return_date" class="form-label">Return Date (Expected Delivery)</label>
+                        <input type="date" class="form-control" name="return_date" id="return_date" required>
+                        <div class="form-text">You can adjust the return date if needed. It cannot be before the pickup date.</div>
+                    </div>
+
                     <div class="mb-3">
                         <label for="remarks" class="form-label">Remarks (Optional)</label>
                         <textarea class="form-control" name="remarks" id="remarks" rows="3" placeholder="Any additional notes..."></textarea>
@@ -486,6 +489,13 @@ function animateCard(card) {
 }
 
 function updateStatus(requestId, currentStatus, bagNumber) {
+    // Fetch the current return date and pickup date for the request (AJAX or from table row data)
+    // For simplicity, pass them as data attributes in the button or fetch via AJAX if needed.
+    // Here, let's assume you have them in JS variables or can fetch via AJAX:
+    let row = document.querySelector('tr[data-request-id="' + requestId + '"]');
+    let returnDate = row ? row.getAttribute('data-return-date') : '';
+    let pickupDate = row ? row.getAttribute('data-pickup-date') : '';
+
     document.getElementById('modal_request_id').value = requestId;
     document.getElementById('new_status').value = currentStatus;
     document.getElementById('request_details').innerHTML = `
@@ -493,6 +503,9 @@ function updateStatus(requestId, currentStatus, bagNumber) {
         <strong>Bag Number:</strong> ${bagNumber}<br>
         <strong>Current Status:</strong> ${currentStatus.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
     `;
+    document.getElementById('return_date').value = returnDate;
+    document.getElementById('return_date').min = pickupDate;
+
     var modal = new bootstrap.Modal(document.getElementById('updateStatusModal'));
     modal.show();
 }

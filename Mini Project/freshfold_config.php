@@ -36,6 +36,7 @@ class User {
     public $password_hash;
     public $full_name;
     public $phone;
+    public $gender;
     public $user_type;
     public $hostel_block;
     public $room_number;
@@ -47,8 +48,8 @@ class User {
     // Register new user
     public function register() {
         $query = "INSERT INTO " . $this->table_name . " 
-                  (username, email, password_hash, full_name, phone, user_type, hostel_block, room_number) 
-                  VALUES (:username, :email, :password_hash, :full_name, :phone, :user_type, :hostel_block, :room_number)";
+                  (username, email, password_hash, full_name, phone, gender, user_type, hostel_block, room_number) 
+                  VALUES (:username, :email, :password_hash, :full_name, :phone, :gender, :user_type, :hostel_block, :room_number)";
 
         $stmt = $this->conn->prepare($query);
 
@@ -60,6 +61,7 @@ class User {
         $stmt->bindParam(":password_hash", $this->password_hash);
         $stmt->bindParam(":full_name", $this->full_name);
         $stmt->bindParam(":phone", $this->phone);
+        $stmt->bindParam(":gender", $this->gender);
         $stmt->bindParam(":user_type", $this->user_type);
         $stmt->bindParam(":hostel_block", $this->hostel_block);
         $stmt->bindParam(":room_number", $this->room_number);

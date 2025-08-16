@@ -98,6 +98,13 @@ $query .= " ORDER BY user_type, full_name";
 $stmt = $db->prepare($query);
 $stmt->execute($params);
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Status options
+$status_options = [
+    'submitted' => 'Request Submitted',
+    'processing' => 'Processing',
+    'delivered' => 'Delivered'
+];
 ?>
 
 <!DOCTYPE html>
@@ -178,6 +185,9 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
         .badge-student { background: #198754; }
         .badge-inactive { background: #dc3545; }
         .badge-active { background: #28a745; }
+        .status-submitted { background-color: #fff3cd; color: #856404; }
+        .status-processing { background-color: #d1ecf1; color: #0c5460; }
+        .status-delivered { background-color: #e2e3e5; color: #41464b; }
         @keyframes fadeInUp {
             0% { opacity: 0; transform: translateY(40px);}
             100% { opacity: 1; transform: translateY(0);}

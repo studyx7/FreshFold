@@ -23,6 +23,7 @@ if($_POST) {
     $user->user_type = 'student'; // Default to student
     $user->hostel_block = $_POST['floor'];
     $user->room_number = $_POST['room_number'];
+    $user->gender = $_POST['gender'];
     
     if($user->register()) {
         $success = 'Registration successful! You can now login.';
@@ -235,6 +236,17 @@ if($_POST) {
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="form-floating">
+                                    <select class="form-select" id="gender" name="gender" required>
+                                        <option value="">Select Gender</option>
+                                        <option value="male">Male</option>
+                                        <option value="female">Female</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                    <label for="gender">Gender</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-floating">
                                     <select class="form-select" id="floor" name="floor" required>
                                         <option value="">Choose...</option>
                                         <option value="-1">-1</option>
@@ -247,6 +259,8 @@ if($_POST) {
                                     <label for="floor">Floor</label>
                                 </div>
                             </div>
+                        </div>
+                        <div class="row">
                             <div class="col-md-6">
                                 <div class="form-floating">
                                     <input type="text" class="form-control" id="room_number" name="room_number" required>

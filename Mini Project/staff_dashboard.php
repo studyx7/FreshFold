@@ -20,12 +20,13 @@ $stmt = $db->query("SELECT COUNT(*) FROM laundry_requests");
 $total_requests = $stmt->fetchColumn();
 
 // Count delivered requests
-$stmt = $db->query("SELECT COUNT(*) FROM laundry_requests WHERE status = 'delivered'");
-$total_delivered = $stmt->fetchColumn();
+$total_delivered = $db->query("SELECT COUNT(*) FROM laundry_requests WHERE status = 'delivered'")->fetchColumn();
 
-// Count pending requests
-$stmt = $db->query("SELECT COUNT(*) FROM laundry_requests WHERE status = 'pending'");
-$total_pending = $stmt->fetchColumn();
+// Count submitted requests
+$total_submitted = $db->query("SELECT COUNT(*) FROM laundry_requests WHERE status = 'submitted'")->fetchColumn();
+
+// Count processing requests
+$total_processing = $db->query("SELECT COUNT(*) FROM laundry_requests WHERE status = 'processing'")->fetchColumn();
 ?>
 
 <!DOCTYPE html>
@@ -343,25 +344,19 @@ $total_pending = $stmt->fetchColumn();
 
     <!-- Statistics -->
     <div class="row">
-        <div class="col-lg-3 col-md-6 mb-3">
+        <div class="col-lg-4 col-md-6 mb-3">
             <div class="stat-card">
-                <div class="stat-number"><?php echo $total_students; ?></div>
-                <div class="stat-label">Students</div>
+                <div class="stat-number"><?php echo $total_submitted; ?></div>
+                <div class="stat-label">Submitted</div>
             </div>
         </div>
-        <div class="col-lg-3 col-md-6 mb-3">
+        <div class="col-lg-4 col-md-6 mb-3">
             <div class="stat-card">
-                <div class="stat-number"><?php echo $total_requests; ?></div>
-                <div class="stat-label">Total Requests</div>
+                <div class="stat-number"><?php echo $total_processing; ?></div>
+                <div class="stat-label">Processing</div>
             </div>
         </div>
-        <div class="col-lg-3 col-md-6 mb-3">
-            <div class="stat-card">
-                <div class="stat-number"><?php echo $total_pending; ?></div>
-                <div class="stat-label">Pending</div>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-6 mb-3">
+        <div class="col-lg-4 col-md-6 mb-3">
             <div class="stat-card">
                 <div class="stat-number"><?php echo $total_delivered; ?></div>
                 <div class="stat-label">Delivered</div>

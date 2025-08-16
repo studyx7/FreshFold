@@ -249,6 +249,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     <th>Type</th>
                     <th>Status</th>
                     <th>Phone</th>
+                    <th>Gender</th> <!-- Add this line -->
                     <th>Hostel/Room</th>
                     <th>Actions</th>
                 </tr>
@@ -286,6 +287,14 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         </span>
                     </td>
                     <td><?php echo htmlspecialchars($user['phone'] ?? '-'); ?></td>
+                    <td>
+                        <?php
+                            if ($user['gender'] === 'male') echo 'Male';
+                            elseif ($user['gender'] === 'female') echo 'Female';
+                            elseif ($user['gender'] === 'other') echo 'Other';
+                            else echo '-';
+                        ?>
+                    </td>
                     <td>
                         <?php
                         if($user['user_type']=='student') {

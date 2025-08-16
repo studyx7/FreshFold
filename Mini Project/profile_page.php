@@ -28,9 +28,10 @@ if($_SERVER['REQUEST_METHOD'] == 'POST') {
         $phone = trim($_POST['phone']);
         $hostel_block = trim($_POST['hostel_block']);
         $room_number = trim($_POST['room_number']);
-        
+        $gender = trim($_POST['gender']); // <-- Add this line
+
         // Basic validation
-        if(empty($full_name) || empty($email) || empty($phone) || empty($hostel_block) || empty($room_number)) {
+        if(empty($full_name) || empty($email) || empty($phone) || empty($hostel_block) || empty($room_number) || empty($gender)) {
             $error_message = "All fields are required.";
         } elseif(!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $error_message = "Invalid email format.";
@@ -43,39 +44,34 @@ if($_SERVER['REQUEST_METHOD'] == 'POST') {
             $check_stmt->bindParam(':email', $email);
             $check_stmt->bindParam(':user_id', $_SESSION['user_id']);
             $check_stmt->execute();
-            
+
             if($check_stmt->rowCount() > 0) {
                 $error_message = "Email already exists for another user.";
             } else {
-                // Update user profile
+                // Update user profile (add gender)
                 $update_query = "UPDATE users SET 
-                                full_name = :full_name, 
-                                email = :email, 
-                                phone = :phone, 
-                                hostel_block = :hostel_block, 
-                                room_number = :room_number,
-                                updated_at = CURRENT_TIMESTAMP
-                                WHERE user_id = :user_id";
-                
+                    full_name = :full_name,
+                    email = :email,
+                    phone = :phone,
+                    hostel_block = :hostel_block,
+                    room_number = :room_number,
+                    gender = :gender
+                    WHERE user_id = :user_id";
                 $update_stmt = $db->prepare($update_query);
                 $update_stmt->bindParam(':full_name', $full_name);
                 $update_stmt->bindParam(':email', $email);
                 $update_stmt->bindParam(':phone', $phone);
                 $update_stmt->bindParam(':hostel_block', $hostel_block);
                 $update_stmt->bindParam(':room_number', $room_number);
+                $update_stmt->bindParam(':gender', $gender); // <-- Add this line
                 $update_stmt->bindParam(':user_id', $_SESSION['user_id']);
-                
+
                 if($update_stmt->execute()) {
-                    // Update session variables
-                    $_SESSION['full_name'] = $full_name;
-                    $_SESSION['hostel_block'] = $hostel_block;
-                    $_SESSION['room_number'] = $room_number;
-                    
+                    $success_message = "Profile updated successfully!";
                     // Refresh user data
                     $current_user = $user->getUserById($_SESSION['user_id']);
-                    $success_message = "Profile updated successfully!";
                 } else {
-                    $error_message = "Error updating profile. Please try again.";
+                    $error_message = "Failed to update profile. Please try again.";
                 }
             }
         }
@@ -745,7 +741,17 @@ $recent_request = !empty($user_requests) ? $user_requests[0] : null;
                                        value="<?php echo htmlspecialchars($current_user['room_number']); ?>" required>
                             </div>
                         </div>
-                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="gender" class="form-label">Gender</label>
+                                <select class="form-select" id="gender" name="gender" required>
+                                    <option value="">Select Gender</option>
+                                    <option value="male" <?php if($current_user['gender']=='male') echo 'selected'; ?>>Male</option>
+                                    <option value="female" <?php if($current_user['gender']=='female') echo 'selected'; ?>>Female</option>
+                                    <option value="other" <?php if($current_user['gender']=='other') echo 'selected'; ?>>Other</option>
+                                </select>
+                            </div>
+                        </div>
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="username" class="form-label">Username</label>

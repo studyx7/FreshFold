@@ -14,10 +14,8 @@ $user_requests = $laundryRequest->getStudentRequests($_SESSION['user_id']);
 
 // Calculate statistics
 $stats = [
-    'pending' => 0,
-    'picked_up' => 0,
-    'in_progress' => 0,
-    'ready' => 0,
+    'submitted' => 0,
+    'processing' => 0,
     'delivered' => 0
 ];
 
@@ -616,32 +614,16 @@ $recent_requests = array_slice($user_requests, 0, 3);
         <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
             <div class="stat-card" onclick="animateCard(this)">
                 <div class="stat-card-content text-center">
-                    <div class="stat-number" data-target="<?php echo $stats['pending']; ?>">0</div>
-                    <div class="stat-label">Pending</div>
+                    <div class="stat-number" data-target="<?php echo $stats['submitted']; ?>">0</div>
+                    <div class="stat-label">Submitted</div>
                 </div>
             </div>
         </div>
         <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
             <div class="stat-card" onclick="animateCard(this)">
                 <div class="stat-card-content text-center">
-                    <div class="stat-number" data-target="<?php echo $stats['picked_up']; ?>">0</div>
-                    <div class="stat-label">Picked Up</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
-            <div class="stat-card" onclick="animateCard(this)">
-                <div class="stat-card-content text-center">
-                    <div class="stat-number" data-target="<?php echo $stats['in_progress']; ?>">0</div>
-                    <div class="stat-label">In Progress</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="stat-card" onclick="animateCard(this)">
-                <div class="stat-card-content text-center">
-                    <div class="stat-number" data-target="<?php echo $stats['ready']; ?>">0</div>
-                    <div class="stat-label">Ready for Delivery</div>
+                    <div class="stat-number" data-target="<?php echo $stats['processing']; ?>">0</div>
+                    <div class="stat-label">Processing</div>
                 </div>
             </div>
         </div>

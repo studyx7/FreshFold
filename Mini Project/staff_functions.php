@@ -61,6 +61,7 @@ function getStaffStats($db) {
     $stats['total_students'] = $db->query("SELECT COUNT(*) FROM users WHERE user_type = 'student'")->fetchColumn();
     $stats['total_requests'] = $db->query("SELECT COUNT(*) FROM laundry_requests")->fetchColumn();
     $stats['delivered'] = $db->query("SELECT COUNT(*) FROM laundry_requests WHERE status = 'delivered'")->fetchColumn();
-    $stats['pending'] = $db->query("SELECT COUNT(*) FROM laundry_requests WHERE status = 'pending'")->fetchColumn();
+    $stats['submitted'] = $db->query("SELECT COUNT(*) FROM laundry_requests WHERE status = 'submitted'")->fetchColumn();
+    $stats['processing'] = $db->query("SELECT COUNT(*) FROM laundry_requests WHERE status = 'processing'")->fetchColumn();
     return $stats;
 }

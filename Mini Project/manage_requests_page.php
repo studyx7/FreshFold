@@ -43,10 +43,8 @@ if($search) {
 
 // Status options
 $status_options = [
-    'pending' => 'Pending Pickup',
-    'picked_up' => 'Picked Up',
-    'in_progress' => 'In Progress',
-    'ready' => 'Ready for Delivery',
+    'submitted' => 'Request Submitted',
+    'processing' => 'Processing',
     'delivered' => 'Delivered'
 ];
 ?>
@@ -130,10 +128,8 @@ $status_options = [
             font-weight: 600;
         }
 
-        .status-pending { background-color: #fff3cd; color: #856404; }
-        .status-picked_up { background-color: #cff4fc; color: #087990; }
-        .status-in_progress { background-color: #d1ecf1; color: #0c5460; }
-        .status-ready { background-color: #d4edda; color: #155724; }
+        .status-submitted { background-color: #fff3cd; color: #856404; }
+        .status-processing { background-color: #d1ecf1; color: #0c5460; }
         .status-delivered { background-color: #e2e3e5; color: #41464b; }
 
         .filters-card {
@@ -240,39 +236,23 @@ $status_options = [
 
     <!-- Quick Stats -->
     <div class="row mb-4">
-        <div class="col-md-2">
+        <div class="col-md-4">
             <div class="card text-center">
                 <div class="card-body">
-                    <h5><?php echo count(array_filter($all_requests, fn($r) => $r['status'] === 'pending')); ?></h5>
-                    <small class="text-muted">Pending</small>
+                    <h5><?php echo count(array_filter($all_requests, fn($r) => $r['status'] === 'submitted')); ?></h5>
+                    <small class="text-muted">Submitted</small>
                 </div>
             </div>
         </div>
-        <div class="col-md-2">
+        <div class="col-md-4">
             <div class="card text-center">
                 <div class="card-body">
-                    <h5><?php echo count(array_filter($all_requests, fn($r) => $r['status'] === 'picked_up')); ?></h5>
-                    <small class="text-muted">Picked Up</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5><?php echo count(array_filter($all_requests, fn($r) => $r['status'] === 'in_progress')); ?></h5>
+                    <h5><?php echo count(array_filter($all_requests, fn($r) => $r['status'] === 'processing')); ?></h5>
                     <small class="text-muted">Processing</small>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5><?php echo count(array_filter($all_requests, fn($r) => $r['status'] === 'ready')); ?></h5>
-                    <small class="text-muted">Ready</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
+        <div class="col-md-4">
             <div class="card text-center">
                 <div class="card-body">
                     <h5><?php echo count(array_filter($all_requests, fn($r) => $r['status'] === 'delivered')); ?></h5>
