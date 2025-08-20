@@ -299,6 +299,21 @@ $total_processing = $db->query("SELECT COUNT(*) FROM laundry_requests WHERE stat
         ::-webkit-scrollbar-thumb:hover {
             background: rgba(255,255,255,0.5);
         }
+        .modal-backdrop.show {
+            opacity: 0.5 !important;
+            background: #000 !important;
+            z-index: 1050 !important;
+        }
+        .modal {
+            z-index: 1060 !important;
+        }
+        .modal-content {
+            opacity: 1 !important;
+            pointer-events: auto !important;
+        }
+        body.modal-open {
+            pointer-events: auto !important;
+        }
     </style>
 </head>
 <body>
@@ -315,6 +330,9 @@ $total_processing = $db->query("SELECT COUNT(*) FROM laundry_requests WHERE stat
         </a>
         <a class="nav-link" href="staff_manage_requests.php">
             <i class="fas fa-tasks"></i> Manage Requests
+        </a>
+        <a class="nav-link" href="staff_complaints.php">
+            <i class="fas fa-comments"></i> Student Complaints
         </a>
         <a class="nav-link" href="profile_page.php">
             <i class="fas fa-user"></i> Profile
@@ -342,24 +360,40 @@ $total_processing = $db->query("SELECT COUNT(*) FROM laundry_requests WHERE stat
         </div>
     </div>
 
-    <!-- Statistics -->
+    <!-- Statistics Tiles (Interactive) -->
     <div class="row">
         <div class="col-lg-4 col-md-6 mb-3">
-            <div class="stat-card">
+            <div class="stat-card tile-interactive" data-status="submitted" style="cursor:pointer;">
                 <div class="stat-number"><?php echo $total_submitted; ?></div>
                 <div class="stat-label">Submitted</div>
             </div>
         </div>
         <div class="col-lg-4 col-md-6 mb-3">
-            <div class="stat-card">
+            <div class="stat-card tile-interactive" data-status="processing" style="cursor:pointer;">
                 <div class="stat-number"><?php echo $total_processing; ?></div>
                 <div class="stat-label">Processing</div>
             </div>
         </div>
         <div class="col-lg-4 col-md-6 mb-3">
-            <div class="stat-card">
+            <div class="stat-card tile-interactive" data-status="delivered" style="cursor:pointer;">
                 <div class="stat-number"><?php echo $total_delivered; ?></div>
                 <div class="stat-label">Delivered</div>
+            </div>
+        </div>
+    </div>
+    <!-- End Statistics Tiles -->
+</div>
+
+<!-- Modal for requests list -->
+<div class="modal fade" id="requestsModal" tabindex="-1" aria-labelledby="requestsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content" style="background: #fff;">
+            <div class="modal-header">
+                <h5 class="modal-title" id="requestsModalLabel">Laundry Requests</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="requestsModalBody">
+                <!-- Table will be injected here -->
             </div>
         </div>
     </div>
@@ -447,6 +481,87 @@ function animateCard(card) {
     setTimeout(() => {
         card.style.transform = '';
     }, 150);
+}
+
+// Make tiles interactive
+document.querySelectorAll('.tile-interactive').forEach(tile => {
+    tile.addEventListener('click', function() {
+        const status = this.getAttribute('data-status');
+        showRequests(status);
+    });
+});
+
+// Show requests by status in modal
+function showRequests(status) {
+    // Requests data (PHP to JS)
+    const requestsData = <?php
+        $stmt = $db->query("SELECT r.*, u.full_name, u.phone, u.room_number, u.hostel_block FROM laundry_requests r JOIN users u ON r.student_id = u.user_id");
+        $allRequests = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        echo json_encode($allRequests);
+    ?>;
+
+    // Filter by status
+    const filtered = requestsData.filter(r => r.status === status);
+
+    // Modal title
+    let title = '';
+    if(status === 'submitted') title = 'Submitted Laundry Requests';
+    else if(status === 'processing') title = 'Processing Laundry Requests';
+    else if(status === 'delivered') title = 'Delivered Laundry Requests';
+
+    document.getElementById('requestsModalLabel').textContent = title;
+
+    // Build table
+    let html = '';
+    if(filtered.length === 0) {
+        html = `<div class="text-center py-4">
+            <i class="fas fa-inbox fa-2x text-muted mb-2"></i>
+            <div>No requests found for this status.</div>
+        </div>`;
+    } else {
+        html = `<div class="table-responsive"><table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Request ID</th>
+                    <th>Bag Number</th>
+                    <th>Student</th>
+                    <th>Room</th>
+                    <th>Pickup Date</th>
+                    <th>Expected Delivery</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>`;
+        filtered.forEach(r => {
+            html += `<tr style="cursor:pointer" onclick="redirectToManageRequest(${r.request_id})">
+                <td><strong>#${r.request_id}</strong></td>
+                <td>${r.bag_number}</td>
+                <td>
+                    <strong>${r.full_name}</strong><br>
+                    <small class="text-muted">${r.phone}</small>
+                </td>
+                <td>Block ${r.hostel_block} - ${r.room_number}</td>
+                <td>${r.pickup_date ? (new Date(r.pickup_date)).toLocaleDateString() : '-'}</td>
+                <td>${r.expected_delivery ? (new Date(r.expected_delivery)).toLocaleDateString() : '-'}</td>
+                <td><span class="badge bg-${
+                    r.status === 'submitted' ? 'warning' :
+                    r.status === 'processing' ? 'info' :
+                    r.status === 'delivered' ? 'success' : 'secondary'
+                }">${r.status.charAt(0).toUpperCase() + r.status.slice(1)}</span></td>
+            </tr>`;
+        });
+        html += `</tbody></table></div>`;
+    }
+    document.getElementById('requestsModalBody').innerHTML = html;
+
+    // Show modal
+    var modal = new bootstrap.Modal(document.getElementById('requestsModal'));
+    modal.show();
+}
+
+// Redirect to Manage Requests page and open the specific request
+function redirectToManageRequest(requestId) {
+    window.location.href = "staff_manage_requests.php?open_request_id=" + encodeURIComponent(requestId);
 }
 </script>
 </body>

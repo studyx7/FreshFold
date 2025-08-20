@@ -8,7 +8,11 @@ $db = $database->getConnection();
 $laundryRequest = new LaundryRequest($db);
 
 // Get all requests for the logged-in student
-$requests = $laundryRequest->getStudentRequests($_SESSION['user_id']);
+$user_requests = $laundryRequest->getStudentRequests($_SESSION['user_id']);
+
+// For admin: Get all requests with optional status filter
+$status_filter = isset($_GET['status']) ? $_GET['status'] : '';
+$all_requests = $laundryRequest->getAllRequests($status_filter);
 ?>
 
 <!DOCTYPE html>
@@ -19,6 +23,7 @@ $requests = $laundryRequest->getStudentRequests($_SESSION['user_id']);
     <title>My Requests - FreshFold</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <meta http-equiv="refresh" content="30">
     <style>
         :root {
             --primary-color: #2c5aa0;
@@ -353,7 +358,7 @@ $requests = $laundryRequest->getStudentRequests($_SESSION['user_id']);
         </a>
     </div>
 
-    <?php if(empty($requests)): ?>
+    <?php if(empty($user_requests)): ?>
     <div class="empty-state">
         <i class="fas fa-inbox"></i>
         <h4>No Requests Yet</h4>
@@ -365,7 +370,7 @@ $requests = $laundryRequest->getStudentRequests($_SESSION['user_id']);
     <?php else: ?>
 
     <div class="row">
-        <?php foreach($requests as $request): ?>
+        <?php foreach($user_requests as $request): ?>
         <div class="col-md-6">
             <div class="request-card">
                 <div class="d-flex justify-content-between align-items-start mb-3">
@@ -374,7 +379,15 @@ $requests = $laundryRequest->getStudentRequests($_SESSION['user_id']);
                         <p class="text-muted mb-0">Bag: <?php echo $request['bag_number']; ?></p>
                     </div>
                     <span class="status-badge status-<?php echo $request['status']; ?>">
-                        <?php echo ucwords(str_replace('_', ' ', $request['status'])); ?>
+                        <?php
+                        $status_map = [
+                            'submitted' => 'Request Submitted',
+                            'processing' => 'Processing',
+                            'delivered' => 'Delivered',
+                            'cancelled' => 'Cancelled'
+                        ];
+                        echo $status_map[$request['status']] ?? ucwords(str_replace('_', ' ', $request['status']));
+                        ?>
                     </span>
                 </div>
 

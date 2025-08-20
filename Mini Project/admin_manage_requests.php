@@ -10,94 +10,36 @@ if (User::getUserType() !== 'admin') {
 
 $database = new Database();
 $db = $database->getConnection();
+$laundryRequest = new LaundryRequest($db);
 
-// Handle activate/deactivate
-if (isset($_POST['toggle_active']) && isset($_POST['user_id'])) {
-    $user_id = $_POST['user_id'];
-    $new_status = $_POST['is_active'] ? 0 : 1;
-    $stmt = $db->prepare("UPDATE users SET is_active = ? WHERE user_id = ?");
-    $stmt->execute([$new_status, $user_id]);
-    showAlert('User status updated.', 'success');
-    redirect('admin_manage_requests.php');
-}
-
-// Handle delete user
-if (isset($_POST['delete_user']) && isset($_POST['user_id'])) {
-    $user_id = $_POST['user_id'];
-    if ($user_id != $_SESSION['user_id']) {
-        $stmt = $db->prepare("DELETE FROM users WHERE user_id = ?");
-        $stmt->execute([$user_id]);
-        showAlert('User deleted.', 'success');
+// Handle status updates
+if($_POST && isset($_POST['update_status'])) {
+    $request_id = $_POST['request_id'];
+    $new_status = $_POST['new_status'];
+    $remarks = $_POST['remarks'] ?? '';
+    
+    if($laundryRequest->updateStatus($request_id, $new_status, $_SESSION['user_id'], $remarks)) {
+        showAlert('Request status updated successfully!', 'success');
     } else {
-        showAlert('You cannot delete your own account.', 'danger');
-    }
-    redirect('admin_manage_requests.php');
-}
-
-// Handle add user
-if (isset($_POST['add_user'])) {
-    $full_name = $_POST['full_name'];
-    $username = $_POST['username'];
-    $email = $_POST['email'];
-    $phone = $_POST['phone'];
-    $user_type = $_POST['user_type'];
-    $hostel_block = $_POST['hostel_block'] ?? null;
-    $room_number = $_POST['room_number'] ?? null;
-    $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
-
-    $stmt = $db->prepare("SELECT COUNT(*) FROM users WHERE username = ? OR email = ?");
-    $stmt->execute([$username, $email]);
-    if ($stmt->fetchColumn() > 0) {
-        showAlert('Username or email already exists.', 'danger');
-    } else {
-        $stmt = $db->prepare("INSERT INTO users (full_name, username, email, phone, user_type, hostel_block, room_number, password_hash, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)");
-        $stmt->execute([$full_name, $username, $email, $phone, $user_type, $hostel_block, $room_number, $password]);
-        showAlert('User added successfully.', 'success');
-        redirect('admin_manage_requests.php');
+        showAlert('Failed to update status. Please try again.', 'danger');
     }
 }
 
-// Handle edit user
-if (isset($_POST['edit_user']) && isset($_POST['user_id'])) {
-    $user_id = $_POST['user_id'];
-    $full_name = $_POST['full_name'];
-    $username = $_POST['username'];
-    $email = $_POST['email'];
-    $phone = $_POST['phone'];
-    $user_type = $_POST['user_type'];
-    $hostel_block = $_POST['hostel_block'] ?? null;
-    $room_number = $_POST['room_number'] ?? null;
-    $update_password = '';
-    $params = [$full_name, $username, $email, $phone, $user_type, $hostel_block, $room_number, $user_id];
-    if (!empty($_POST['password'])) {
-        $update_password = ', password_hash = ?';
-        $params = [$full_name, $username, $email, $phone, $user_type, $hostel_block, $room_number, password_hash($_POST['password'], PASSWORD_DEFAULT), $user_id];
-    }
-    $stmt = $db->prepare("UPDATE users SET full_name=?, username=?, email=?, phone=?, user_type=?, hostel_block=?, room_number=? $update_password WHERE user_id=?");
-    $stmt->execute($params);
-    showAlert('User updated successfully.', 'success');
-    redirect('admin_manage_requests.php');
-}
-
-// Filter by user type and search
-$user_type = $_GET['user_type'] ?? '';
+// Get filter parameters
+$status_filter = $_GET['status'] ?? '';
 $search = $_GET['search'] ?? '';
-$query = "SELECT * FROM users WHERE 1";
-$params = [];
-if ($user_type && in_array($user_type, ['student', 'staff', 'admin'])) {
-    $query .= " AND user_type = ?";
-    $params[] = $user_type;
+
+// Admin: Get all requests (no restriction)
+$all_requests = $laundryRequest->getAllRequests($status_filter);
+
+// Filter by search if provided
+if($search) {
+    $all_requests = array_filter($all_requests, function($request) use ($search) {
+        return stripos($request['bag_number'], $search) !== false || 
+               stripos($request['full_name'], $search) !== false ||
+               stripos($request['room_number'], $search) !== false;
+    });
 }
-if ($search) {
-    $query .= " AND (full_name LIKE ? OR email LIKE ? OR username LIKE ?)";
-    $params[] = "%$search%";
-    $params[] = "%$search%";
-    $params[] = "%$search%";
-}
-$query .= " ORDER BY user_type, full_name";
-$stmt = $db->prepare($query);
-$stmt->execute($params);
-$users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Status options
 $status_options = [
@@ -174,33 +116,37 @@ $status_options = [
             z-index: 10;
             position: relative;
         }
-        .user-table {
+        .request-table {
             background: white;
             border-radius: 15px;
             overflow: hidden;
             box-shadow: 0 5px 15px rgba(0,0,0,0.08);
         }
-        .badge-admin { background: #6f42c1; }
-        .badge-staff { background: #0d6efd; }
-        .badge-student { background: #198754; }
-        .badge-inactive { background: #dc3545; }
-        .badge-active { background: #28a745; }
+        .status-badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
         .status-submitted { background-color: #fff3cd; color: #856404; }
         .status-processing { background-color: #d1ecf1; color: #0c5460; }
         .status-delivered { background-color: #e2e3e5; color: #41464b; }
-        @keyframes fadeInUp {
-            0% { opacity: 0; transform: translateY(40px);}
-            100% { opacity: 1; transform: translateY(0);}
+        .filters-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
         }
-        @keyframes popIn {
-            0% { opacity: 0; transform: scale(0.95);}
-            100% { opacity: 1; transform: scale(1);}
+        .btn-sm {
+            padding: 4px 8px;
+            font-size: 0.8rem;
         }
-        .animated-fadeInUp {
-            animation: fadeInUp 0.7s cubic-bezier(.39,.575,.565,1.000) both;
+        .modal-content {
+            border-radius: 15px;
         }
-        .animated-popIn {
-            animation: popIn 0.5s cubic-bezier(.39,.575,.565,1.000) both;
+        .table td {
+            vertical-align: middle;
         }
     </style>
 </head>
@@ -234,284 +180,185 @@ $status_options = [
     </nav>
 </div>
 
-<div class="main-content animated-fadeInUp">
-    <h2 class="mb-4"><i class="fas fa-tasks me-2"></i>Manage Requests</h2>
-    <div class="mb-3 d-flex justify-content-between">
-        <form class="d-flex" method="get">
-            <select name="user_type" class="form-select me-2" onchange="this.form.submit()">
-                <option value="">All Types</option>
-                <option value="student" <?php if($user_type=='student') echo 'selected'; ?>>Student</option>
-                <option value="staff" <?php if($user_type=='staff') echo 'selected'; ?>>Staff</option>
-                <option value="admin" <?php if($user_type=='admin') echo 'selected'; ?>>Admin</option>
-            </select>
-            <input type="text" name="search" class="form-control me-2" placeholder="Search name, email, username..." value="<?php echo htmlspecialchars($search); ?>">
-            <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i></button>
-        </form>
-        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addUserModal">
-            <i class="fas fa-user-plus"></i> Add User
-        </button>
-    </div>
-    <div class="user-table table-responsive">
-        <table class="table table-hover mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th>#</th>
-                    <th>Name</th>
-                    <th>Email / Username</th>
-                    <th>Type</th>
-                    <th>Status</th>
-                    <th>Phone</th>
-                    <th>Hostel/Room</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php if(empty($users)): ?>
-                <tr>
-                    <td colspan="8" class="text-center py-4">
-                        <i class="fas fa-inbox fa-2x text-muted mb-2"></i>
-                        <div>No users found</div>
-                    </td>
-                </tr>
-                <?php else: ?>
-                <?php foreach($users as $user): ?>
-                <tr>
-                    <td><?php echo $user['user_id']; ?></td>
-                    <td><?php echo htmlspecialchars($user['full_name'] ?? $user['username']); ?></td>
-                    <td>
-                        <div><?php echo htmlspecialchars($user['email']); ?></div>
-                        <small class="text-muted"><?php echo htmlspecialchars($user['username']); ?></small>
-                    </td>
-                    <td>
-                        <span class="badge 
-                            <?php
-                                if($user['user_type']=='admin') echo 'badge-admin';
-                                elseif($user['user_type']=='staff') echo 'badge-staff';
-                                else echo 'badge-student';
-                            ?>">
-                            <?php echo ucfirst($user['user_type']); ?>
-                        </span>
-                    </td>
-                    <td>
-                        <span class="badge <?php echo $user['is_active'] ? 'badge-active' : 'badge-inactive'; ?>">
-                            <?php echo $user['is_active'] ? 'Active' : 'Inactive'; ?>
-                        </span>
-                    </td>
-                    <td><?php echo htmlspecialchars($user['phone'] ?? '-'); ?></td>
-                    <td>
-                        <?php
-                        if($user['user_type']=='student') {
-                            echo 'Floor ' . htmlspecialchars($user['hostel_block']) . ', Room ' . htmlspecialchars($user['room_number']);
-                        } else {
-                            echo '-';
-                        }
-                        ?>
-                    </td>
-                    <td>
-                        <?php if($user['user_type'] !== 'admin' || $user['user_id'] != $_SESSION['user_id']): ?>
-                        <form method="POST" style="display:inline;">
-                            <input type="hidden" name="user_id" value="<?php echo $user['user_id']; ?>">
-                            <input type="hidden" name="is_active" value="<?php echo $user['is_active']; ?>">
-                            <button type="submit" name="toggle_active" class="btn btn-sm <?php echo $user['is_active'] ? 'btn-danger' : 'btn-success'; ?>">
-                                <?php echo $user['is_active'] ? 'Deactivate' : 'Activate'; ?>
-                            </button>
-                        </form>
-                        <button class="btn btn-sm btn-primary" onclick='openEditModal(<?php echo json_encode($user); ?>)'>
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <form method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this user?');">
-                            <input type="hidden" name="user_id" value="<?php echo $user['user_id']; ?>">
-                            <button type="submit" name="delete_user" class="btn btn-sm btn-danger">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </form>
-                        <?php else: ?>
-                            <span class="text-muted">-</span>
-                        <?php endif; ?>
-                    </td>
-                </tr>
-                <?php endforeach; ?>
-                <?php endif; ?>
-            </tbody>
-        </table>
-    </div>
-</div>
+<div class="main-content">
+    <?php displayAlerts(); ?>
+    <h2 class="mb-4"><i class="fas fa-tasks me-2"></i>Manage Laundry Requests</h2>
 
-<!-- Single Edit User Modal -->
-<div class="modal fade" id="editUserModal" tabindex="-1">
-    <div class="modal-dialog animated-popIn">
-        <div class="modal-content">
-            <form method="POST" id="editUserForm">
-                <input type="hidden" name="edit_user" value="1">
-                <input type="hidden" name="user_id" id="edit_user_id">
-                <div class="modal-header">
-                    <h5 class="modal-title">Edit User</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    <!-- Filters -->
+    <div class="filters-card">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Filter by Status</label>
+                <select name="status" class="form-select" onchange="this.form.submit()">
+                    <option value="">All Requests</option>
+                    <?php foreach($status_options as $value => $label): ?>
+                    <option value="<?php echo $value; ?>" <?php echo $status_filter === $value ? 'selected' : ''; ?>>
+                        <?php echo $label; ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Search</label>
+                <input type="text" name="search" class="form-control" placeholder="Bag number, student name, or room..." value="<?php echo htmlspecialchars($search); ?>">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">&nbsp;</label>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i>
+                    </button>
+                    <a href="admin_manage_requests.php" class="btn btn-outline-secondary">
+                        <i class="fas fa-times"></i>
+                    </a>
                 </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">Full Name</label>
-                        <input type="text" name="full_name" class="form-control" id="edit_full_name" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Username</label>
-                        <input type="text" name="username" class="form-control" id="edit_username" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Email</label>
-                        <input type="email" name="email" class="form-control" id="edit_email" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Phone</label>
-                        <input type="text" name="phone" class="form-control" id="edit_phone">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">User Type</label>
-                        <select name="user_type" class="form-select" id="edit_user_type" required>
-                            <option value="student">Student</option>
-                            <option value="staff">Staff</option>
-                            <option value="admin">Admin</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Floor</label>
-                        <select name="hostel_block" class="form-select" id="edit_hostel_block">
-                            <option value="">Choose...</option>
-                            <option value="-1">-1</option>
-                            <option value="Ground Floor">Ground Floor</option>
-                            <option value="1st Floor">1st Floor</option>
-                            <option value="2nd Floor">2nd Floor</option>
-                            <option value="3rd Floor">3rd Floor</option>
-                            <option value="4th Floor">4th Floor</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Room Number</label>
-                        <input type="text" name="room_number" class="form-control" id="edit_room_number">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Password (leave blank to keep unchanged)</label>
-                        <input type="password" name="password" class="form-control">
-                    </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5><?php echo count(array_filter($all_requests, fn($r) => $r['status'] === 'submitted')); ?></h5>
+                    <small class="text-muted">Submitted</small>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5><?php echo count(array_filter($all_requests, fn($r) => $r['status'] === 'processing')); ?></h5>
+                    <small class="text-muted">Processing</small>
                 </div>
-            </form>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5><?php echo count(array_filter($all_requests, fn($r) => $r['status'] === 'delivered')); ?></h5>
+                    <small class="text-muted">Delivered</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Requests Table -->
+    <div class="request-table">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Request ID</th>
+                        <th>Bag Number</th>
+                        <th>Student</th>
+                        <th>Room</th>
+                        <th>Pickup Date</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if(empty($all_requests)): ?>
+                    <tr>
+                        <td colspan="7" class="text-center py-4">
+                            <i class="fas fa-inbox fa-2x text-muted mb-2"></i>
+                            <div>No requests found</div>
+                        </td>
+                    </tr>
+                    <?php else: ?>
+                    <?php foreach($all_requests as $request): ?>
+                    <tr>
+                        <td><strong>#<?php echo $request['request_id']; ?></strong></td>
+                        <td><?php echo $request['bag_number']; ?></td>
+                        <td>
+                            <strong><?php echo htmlspecialchars($request['full_name']); ?></strong><br>
+                            <small class="text-muted"><?php echo $request['phone']; ?></small>
+                        </td>
+                        <td>Block <?php echo $request['hostel_block']; ?> - <?php echo $request['room_number']; ?></td>
+                        <td><?php echo date('M j, Y', strtotime($request['pickup_date'])); ?></td>
+                        <td>
+                            <span class="status-badge status-<?php echo $request['status']; ?>">
+                                <?php echo ucwords(str_replace('_', ' ', $request['status'])); ?>
+                            </span>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" onclick="updateStatus(<?php echo $request['request_id']; ?>, '<?php echo $request['status']; ?>', '<?php echo htmlspecialchars($request['bag_number']); ?>')">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm btn-info" onclick="viewDetails(<?php echo $request['request_id']; ?>)">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
 
-<!-- Add User Modal -->
-<div class="modal fade" id="addUserModal" tabindex="-1">
+<!-- Update Status Modal -->
+<div class="modal fade" id="updateStatusModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Request Status</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
             <form method="POST">
-                <input type="hidden" name="add_user" value="1">
-                <div class="modal-header">
-                    <h5 class="modal-title">Add User</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
                 <div class="modal-body">
+                    <input type="hidden" name="request_id" id="modal_request_id">
+                    <input type="hidden" name="update_status" value="1">
+                    
                     <div class="mb-3">
-                        <label class="form-label">Full Name</label>
-                        <input type="text" name="full_name" class="form-control" required>
+                        <label class="form-label">Request Details</label>
+                        <div id="request_details" class="bg-light p-3 rounded"></div>
                     </div>
+                    
                     <div class="mb-3">
-                        <label class="form-label">Username</label>
-                        <input type="text" name="username" class="form-control" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Email</label>
-                        <input type="email" name="email" class="form-control" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Phone</label>
-                        <input type="text" name="phone" class="form-control">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">User Type</label>
-                        <select name="user_type" class="form-select" required onchange="toggleStudentFields(this.value)">
-                            <option value="student">Student</option>
-                            <option value="staff">Staff</option>
-                            <option value="admin">Admin</option>
+                        <label for="new_status" class="form-label">New Status</label>
+                        <select class="form-select" name="new_status" id="new_status" required>
+                            <?php foreach($status_options as $value => $label): ?>
+                            <option value="<?php echo $value; ?>"><?php echo $label; ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="mb-3 student-fields">
-                        <label class="form-label">Floor</label>
-                        <select name="hostel_block" class="form-select">
-                            <option value="">Choose...</option>
-                            <option value="-1">-1</option>
-                            <option value="Ground Floor">Ground Floor</option>
-                            <option value="1st Floor">1st Floor</option>
-                            <option value="2nd Floor">2nd Floor</option>
-                            <option value="3rd Floor">3rd Floor</option>
-                            <option value="4th Floor">4th Floor</option>
-                        </select>
-                    </div>
-                    <div class="mb-3 student-fields">
-                        <label class="form-label">Room Number</label>
-                        <input type="text" name="room_number" class="form-control">
-                    </div>
+                    
                     <div class="mb-3">
-                        <label class="form-label">Password</label>
-                        <input type="password" name="password" class="form-control" required>
+                        <label for="remarks" class="form-label">Remarks (Optional)</label>
+                        <textarea class="form-control" name="remarks" id="remarks" rows="3" placeholder="Any additional notes..."></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success">Add User</button>
+                    <button type="submit" class="btn btn-primary">Update Status</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-<div class="particles" id="particles"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
 <script>
-function toggleStudentFields(type) {
-    var fields = document.querySelectorAll('.student-fields');
-    fields.forEach(function(field) {
-        field.style.display = (type === 'student') ? 'block' : 'none';
-    });
-}
-document.addEventListener('DOMContentLoaded', function() {
-    var userTypeSelect = document.querySelector('select[name="user_type"]');
-    if (userTypeSelect) {
-        toggleStudentFields(userTypeSelect.value);
-        userTypeSelect.addEventListener('change', function() {
-            toggleStudentFields(this.value);
-        });
-    }
-});
-function createParticles() {
-    const particlesContainer = document.getElementById('particles');
-    const particleCount = 20;
-    for (let i = 0; i < particleCount; i++) {
-        const particle = document.createElement('div');
-        particle.className = 'particle';
-        particle.style.left = Math.random() * 100 + '%';
-        particle.style.top = Math.random() * 100 + '%';
-        particle.style.animationDelay = Math.random() * 6 + 's';
-        particle.style.animationDuration = (Math.random() * 3 + 3) + 's';
-        particlesContainer.appendChild(particle);
-    }
-}
-createParticles();
-
-function openEditModal(user) {
-    document.getElementById('edit_user_id').value = user.user_id;
-    document.getElementById('edit_full_name').value = user.full_name;
-    document.getElementById('edit_username').value = user.username;
-    document.getElementById('edit_email').value = user.email;
-    document.getElementById('edit_phone').value = user.phone;
-    document.getElementById('edit_user_type').value = user.user_type;
-    document.getElementById('edit_hostel_block').value = user.hostel_block || '';
-    document.getElementById('edit_room_number').value = user.room_number || '';
-    var modal = new bootstrap.Modal(document.getElementById('editUserModal'));
+function updateStatus(requestId, currentStatus, bagNumber) {
+    document.getElementById('modal_request_id').value = requestId;
+    document.getElementById('new_status').value = currentStatus;
+    document.getElementById('request_details').innerHTML = `
+        <strong>Request ID:</strong> #${requestId}<br>
+        <strong>Bag Number:</strong> ${bagNumber}<br>
+        <strong>Current Status:</strong> ${currentStatus.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+    `;
+    
+    var modal = new bootstrap.Modal(document.getElementById('updateStatusModal'));
     modal.show();
+}
+
+function viewDetails(requestId) {
+    // This can be expanded to show a detailed view modal
+    alert('View details functionality can be implemented here for request #' + requestId);
 }
 </script>
 </body>

@@ -26,12 +26,22 @@ if($_SERVER['REQUEST_METHOD'] == 'POST') {
         $full_name = trim($_POST['full_name']);
         $email = trim($_POST['email']);
         $phone = trim($_POST['phone']);
-        $hostel_block = trim($_POST['hostel_block']);
-        $room_number = trim($_POST['room_number']);
-        $gender = trim($_POST['gender']); // <-- Add this line
+        $gender = trim($_POST['gender']);
+
+        // Only require hostel_block and room_number for students
+        if($current_user['user_type'] === 'student') {
+            $hostel_block = trim($_POST['hostel_block']);
+            $room_number = trim($_POST['room_number']);
+        } else {
+            $hostel_block = '';
+            $room_number = '';
+        }
 
         // Basic validation
-        if(empty($full_name) || empty($email) || empty($phone) || empty($hostel_block) || empty($room_number) || empty($gender)) {
+        if(
+            empty($full_name) || empty($email) || empty($phone) || empty($gender) ||
+            ($current_user['user_type'] === 'student' && (empty($hostel_block) || empty($room_number)))
+        ) {
             $error_message = "All fields are required.";
         } elseif(!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $error_message = "Invalid email format.";
@@ -63,7 +73,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $update_stmt->bindParam(':phone', $phone);
                 $update_stmt->bindParam(':hostel_block', $hostel_block);
                 $update_stmt->bindParam(':room_number', $room_number);
-                $update_stmt->bindParam(':gender', $gender); // <-- Add this line
+                $update_stmt->bindParam(':gender', $gender);
                 $update_stmt->bindParam(':user_id', $_SESSION['user_id']);
 
                 if($update_stmt->execute()) {
@@ -599,49 +609,24 @@ $recent_request = !empty($user_requests) ? $user_requests[0] : null;
     <div class="brand">
         <i class="fas fa-tshirt fa-2x mb-2"></i>
         <h4>FreshFold</h4>
-        <small>Laundry Management</small>
+        <small>Admin Panel</small>
     </div>
     <nav class="nav flex-column">
-        <?php if($_SESSION['user_type'] === 'admin'): ?>
-            <a class="nav-link" href="admin_dashboard.php">
-                <i class="fas fa-home"></i> Dashboard
-            </a>
-            <a class="nav-link" href="admin_manage_requests.php">
-                <i class="fas fa-tasks"></i> Manage Requests
-            </a>
-            <a class="nav-link" href="users.php">
-                <i class="fas fa-users"></i> Users
-            </a>
-            <a class="nav-link active" href="profile_page.php">
-                <i class="fas fa-user"></i> Profile
-            </a>
-        <?php elseif($_SESSION['user_type'] === 'staff'): ?>
-            <a class="nav-link" href="staff_dashboard.php">
-                <i class="fas fa-chart-line"></i> Dashboard
-            </a>
-            <a class="nav-link" href="staff_manage_requests.php">
-                <i class="fas fa-tasks"></i> Manage Requests
-            </a>
-            <a class="nav-link active" href="profile_page.php">
-                <i class="fas fa-user"></i> Profile
-            </a>
-        <?php else: ?>
-            <a class="nav-link" href="dashboard_page.php">
-                <i class="fas fa-home"></i> Dashboard
-            </a>
-            <a class="nav-link" href="new_request_page.php">
-                <i class="fas fa-plus-circle"></i> New Request
-            </a>
-            <a class="nav-link" href="my_requests_page.php">
-                <i class="fas fa-list"></i> My Requests
-            </a>
-            <a class="nav-link" href="issue_report_page.php">
-                <i class="fas fa-exclamation-triangle"></i> Report Issue
-            </a>
-            <a class="nav-link active" href="profile_page.php">
-                <i class="fas fa-user"></i> Profile
-            </a>
-        <?php endif; ?>
+        <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='admin_dashboard.php') echo ' active'; ?>" href="admin_dashboard.php">
+            <i class="fas fa-chart-line"></i> Dashboard
+        </a>
+        <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='admin_manage_requests.php') echo ' active'; ?>" href="admin_manage_requests.php">
+            <i class="fas fa-tasks"></i> Manage Requests
+        </a>
+        <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='users.php') echo ' active'; ?>" href="users.php">
+            <i class="fas fa-users"></i> Users
+        </a>
+        <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='admin_issue_management.php') echo ' active'; ?>" href="admin_issue_management.php">
+            <i class="fas fa-exclamation-triangle"></i> Issue Management
+        </a>
+        <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='profile_page.php') echo ' active'; ?>" href="profile_page.php">
+            <i class="fas fa-user"></i> Profile
+        </a>
         <hr style="border-color: rgba(255,255,255,0.2); margin: 20px;">
         <a class="nav-link" href="logout.php" onclick="return confirm('Are you sure you want to logout?')">
             <i class="fas fa-sign-out-alt"></i> Logout
@@ -723,6 +708,7 @@ $recent_request = !empty($user_requests) ? $user_requests[0] : null;
                                 <input type="tel" class="form-control" id="phone" name="phone" 
                                        value="<?php echo htmlspecialchars($current_user['phone']); ?>" required>
                             </div>
+                            <?php if($current_user['user_type'] === 'student'): ?>
                             <div class="col-md-3 mb-3">
                                 <label for="hostel_block" class="form-label">Floor</label>
                                 <select class="form-select" id="hostel_block" name="hostel_block" required>
@@ -740,6 +726,7 @@ $recent_request = !empty($user_requests) ? $user_requests[0] : null;
                                 <input type="text" class="form-control" id="room_number" name="room_number" 
                                        value="<?php echo htmlspecialchars($current_user['room_number']); ?>" required>
                             </div>
+                            <?php endif; ?>
                         </div>
                         <div class="row">
                             <div class="col-md-6 mb-3">

@@ -197,6 +197,15 @@ class LaundryRequest {
         if($stmt->execute()) {
             // Log status change
             $this->logStatusChange($request_id, $current_status, $new_status, $updated_by, $remarks);
+
+            // Send notification to student if status changed
+            $student_id = $this->getStudentIdByRequest($request_id);
+            if ($student_id) {
+                $title = "Laundry Request Status Updated";
+                $msg = "Your laundry request #$request_id status changed to <b>" . ucfirst($new_status) . "</b>.";
+                $target_url = "manage_requests_page.php?open_request_id=$request_id";
+                $this->sendNotification($student_id, $title, $msg, 'info', $target_url);
+            }
             return true;
         }
         return false;
@@ -239,44 +248,63 @@ class LaundryRequest {
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
+
+    private function getStudentIdByRequest($request_id) {
+        $stmt = $this->conn->prepare("SELECT student_id FROM laundry_requests WHERE request_id = ?");
+        $stmt->execute([$request_id]);
+        return $stmt->fetchColumn();
+    }
+
+    private function sendNotification($user_id, $title, $message, $type = 'info', $target_url = null) {
+        $stmt = $this->conn->prepare("INSERT INTO notifications (user_id, title, message, type, target_url) VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([$user_id, $title, $message, $type, $target_url]);
+    }
 }
 
-// Utility functions
-function redirect($page) {
-    header("Location: $page");
+// Add this utility function at the end of the file (outside any class)
+function requireLogin() {
+    if (!isset($_SESSION['user_id'])) {
+        header('Location: login_page.php');
+        exit();
+    }
+}
+
+// Add this utility function at the end of the file (outside any class)
+function redirect($url) {
+    header("Location: $url");
     exit();
 }
 
-function showAlert($message, $type = 'info') {
-    $_SESSION['alert'] = [
-        'message' => $message,
-        'type' => $type
-    ];
+// Add this utility function at the end of the file (outside any class)
+function requireUserType($type) {
+    if (!isset($_SESSION['user_type']) || $_SESSION['user_type'] !== $type) {
+        header('Location: login_page.php');
+        exit();
+    }
 }
 
+// Add this utility function at the end of the file (outside any class)
 function displayAlerts() {
-    if(isset($_SESSION['alert'])) {
-        $alert = $_SESSION['alert'];
-        echo '<div class="alert alert-' . $alert['type'] . ' alert-dismissible fade show" role="alert">';
-        echo $alert['message'];
-        echo '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
-        echo '</div>';
-        unset($_SESSION['alert']);
+    if (!empty($GLOBALS['success_message'])) {
+        echo '<div class="alert alert-success alert-dismissible fade show" role="alert">'
+            . htmlspecialchars($GLOBALS['success_message']) .
+            '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>';
+    }
+    if (!empty($GLOBALS['error_message'])) {
+        echo '<div class="alert alert-danger alert-dismissible fade show" role="alert">'
+            . htmlspecialchars($GLOBALS['error_message']) .
+            '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>';
     }
 }
 
-// Authentication middleware
-function requireLogin() {
-    if(!User::isLoggedIn()) {
-        redirect('login_page.php');
+// Add this utility function at the end of the file (outside any class)
+function showAlert($message, $type = 'info') {
+    // Store the alert in a global variable for displayAlerts()
+    if ($type === 'success') {
+        $GLOBALS['success_message'] = $message;
+    } else {
+        $GLOBALS['error_message'] = $message;
     }
 }
-
-function requireUserType($required_type) {
-    requireLogin();
-    if(User::getUserType() !== $required_type) {
-        showAlert('Access denied. Insufficient permissions.', 'danger');
-        redirect('dashboard.php');
-    }
-}
-?>

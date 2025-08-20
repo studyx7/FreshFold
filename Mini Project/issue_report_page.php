@@ -16,7 +16,7 @@ $active_requests = array_filter($user_requests, function($request) {
 });
 
 // Handle form submission
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['issue_type'], $_POST['description'], $_POST['priority'], $_POST['contact_preference'])) {
     $issue_type = $_POST['issue_type'];
     $request_id = !empty($_POST['request_id']) ? $_POST['request_id'] : null;
     $description = $_POST['description'];
@@ -38,10 +38,31 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if ($stmt->execute()) {
         $issue_id = $db->lastInsertId();
         showAlert("Issue reported successfully! Issue ID: #" . str_pad($issue_id, 4, '0', STR_PAD_LEFT), 'success');
-        redirect('report_issue_page.php');
+        redirect('issue_report_page.php');
     } else {
         showAlert("Error reporting issue. Please try again.", 'danger');
     }
+}
+
+// Handle delete
+if (isset($_POST['delete_issue_id'])) {
+    $delete_id = intval($_POST['delete_issue_id']);
+    $stmt = $db->prepare("DELETE FROM issues WHERE issue_id = ? AND student_id = ?");
+    $stmt->execute([$delete_id, $_SESSION['user_id']]);
+    showAlert("Complaint deleted successfully.", "success");
+    redirect('issue_report_page.php');
+}
+
+// Handle edit
+if (isset($_POST['edit_issue_id'])) {
+    $edit_id = intval($_POST['edit_issue_id']);
+    $edit_type = $_POST['edit_issue_type'];
+    $edit_desc = $_POST['edit_description'];
+    $edit_priority = $_POST['edit_priority'];
+    $stmt = $db->prepare("UPDATE issues SET issue_type = ?, description = ?, priority = ? WHERE issue_id = ? AND student_id = ? AND (response IS NULL OR response = '')");
+    $stmt->execute([$edit_type, $edit_desc, $edit_priority, $edit_id, $_SESSION['user_id']]);
+    showAlert("Complaint updated successfully.", "success");
+    redirect('issue_report_page.php');
 }
 
 // Get user's previous issues
@@ -54,6 +75,8 @@ $issues_stmt = $db->prepare($issues_query);
 $issues_stmt->bindParam(":student_id", $_SESSION['user_id']);
 $issues_stmt->execute();
 $user_issues = $issues_stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$open_issue_id = isset($_GET['open_issue_id']) ? intval($_GET['open_issue_id']) : 0;
 ?>
 
 <!DOCTYPE html>
@@ -389,7 +412,18 @@ $user_issues = $issues_stmt->fetchAll(PDO::FETCH_ASSOC);
             font-weight: 600;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
+
+        /* Highlight effect for opened issue */
+        .highlight {
+            animation: highlightAnimation 2s ease-out;
+        }
+
+        @keyframes highlightAnimation {
+            0% { background-color: rgba(255, 255, 255, 0.2); }
+            100% { background-color: transparent; }
+        }
     </style>
+    <meta http-equiv="refresh" content="30">
 </head>
 <body>
 
@@ -416,7 +450,7 @@ $user_issues = $issues_stmt->fetchAll(PDO::FETCH_ASSOC);
         <a class="nav-link" href="my_requests_page.php">
             <i class="fas fa-list"></i> My Requests
         </a>
-        <a class="nav-link active" href="report_issue_page.php">
+        <a class="nav-link active" href="issue_report_page.php">
             <i class="fas fa-exclamation-triangle"></i> Report Issue
         </a>
         
@@ -537,55 +571,37 @@ $user_issues = $issues_stmt->fetchAll(PDO::FETCH_ASSOC);
                 </div>
                 <?php else: ?>
                     <?php foreach($user_issues as $issue): ?>
-                    <div class="issue-item">
-                        <div class="d-flex justify-content-between align-items-start mb-2">
-                            <div>
-                                <h6 class="mb-1">
-                                    <i class="fas fa-exclamation-circle me-2"></i>
-                                    <?php echo ucfirst(str_replace('_', ' ', $issue['issue_type'])); ?>
-                                </h6>
-                                <small class="text-muted">
-                                    Issue #<?php echo str_pad($issue['issue_id'], 4, '0', STR_PAD_LEFT); ?>
-                                    <?php if($issue['bag_number']): ?>
-                                        • Related to: <?php echo $issue['bag_number']; ?>
-                                    <?php endif; ?>
-                                </small>
-                            </div>
-                            <div class="text-end">
-                                <span class="status-badge status-<?php echo $issue['status']; ?>">
-                                    <?php echo ucfirst(str_replace('_', ' ', $issue['status'])); ?>
-                                </span>
-                                <br>
-                                <small class="priority-<?php echo $issue['priority']; ?>">
-                                    <i class="fas fa-flag"></i> <?php echo ucfirst($issue['priority']); ?>
-                                </small>
-                            </div>
+                    <div class="issue-item mb-3" id="issue-card-<?php echo $issue['issue_id']; ?>">
+                        <div>
+                            <strong>Type:</strong> <?php echo ucwords(str_replace('_',' ', $issue['issue_type'])); ?>
+                            <span class="badge status-<?php echo $issue['status']; ?>"><?php echo ucfirst($issue['status']); ?></span>
+                            <span class="badge priority-<?php echo $issue['priority']; ?>"><?php echo ucfirst($issue['priority']); ?></span>
                         </div>
-                        
-                        <p class="mb-2"><?php echo htmlspecialchars($issue['description']); ?></p>
-                        
-                        <div class="d-flex justify-content-between align-items-center">
-                            <small class="text-muted">
-                                <i class="fas fa-clock"></i> 
-                                <?php echo date('M j, Y g:i A', strtotime($issue['created_at'])); ?>
-                            </small>
-                            <small class="text-muted">
-                                <i class="fas fa-phone"></i> 
-                                <?php echo ucfirst($issue['contact_preference']); ?>
-                            </small>
+                        <div class="mb-2">
+                            <strong>Description:</strong>
+                            <div class="bg-light rounded p-2"><?php echo nl2br(htmlspecialchars($issue['description'])); ?></div>
                         </div>
-                        
-                        <?php if($issue['response'] && $issue['status'] != 'open'): ?>
-                        <div class="mt-3 pt-3 border-top">
-                            <h6 class="text-success"><i class="fas fa-reply me-2"></i>Response:</h6>
-                            <p class="mb-0"><?php echo htmlspecialchars($issue['response']); ?></p>
-                            <?php if($issue['resolved_at']): ?>
-                            <small class="text-muted">
-                                Resolved on <?php echo date('M j, Y g:i A', strtotime($issue['resolved_at'])); ?>
-                            </small>
+                        <?php if($issue['response']): ?>
+                            <div class="mb-2">
+                                <strong>Staff Reply:</strong>
+                                <div class="bg-success bg-opacity-10 rounded p-2"><?php echo nl2br(htmlspecialchars($issue['response'])); ?></div>
+                            </div>
+                        <?php endif; ?>
+                        <div class="d-flex gap-2">
+                            <?php if(empty($issue['response'])): ?>
+                                <!-- Edit button triggers modal -->
+                                <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#editIssueModal<?php echo $issue['issue_id']; ?>">
+                                    <i class="fas fa-edit"></i> Edit
+                                </button>
+                                <!-- Delete button triggers form submit -->
+                                <form method="POST" style="display:inline;">
+                                    <input type="hidden" name="delete_issue_id" value="<?php echo $issue['issue_id']; ?>">
+                                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this complaint?');">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </button>
+                                </form>
                             <?php endif; ?>
                         </div>
-                        <?php endif; ?>
                     </div>
                     <?php endforeach; ?>
                 <?php endif; ?>
@@ -593,6 +609,55 @@ $user_issues = $issues_stmt->fetchAll(PDO::FETCH_ASSOC);
         </div>
     </div>
 </div>
+
+<!-- Render all Edit modals OUTSIDE the issues-container and after the issues list -->
+<?php foreach($user_issues as $issue): ?>
+    <?php if(empty($issue['response'])): ?>
+    <div class="modal fade" id="editIssueModal<?php echo $issue['issue_id']; ?>" tabindex="-1" aria-labelledby="editIssueModalLabel<?php echo $issue['issue_id']; ?>" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST">
+                    <input type="hidden" name="edit_issue_id" value="<?php echo $issue['issue_id']; ?>">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="editIssueModalLabel<?php echo $issue['issue_id']; ?>">Edit Complaint/Query</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Type</label>
+                            <select name="edit_issue_type" class="form-select" required>
+                                <option value="">Select Type</option>
+                                <?php
+                                $types = ['damaged_item','missing_item','wrong_item','poor_cleaning','delay','pickup_issue','staff_behavior','billing','other'];
+                                foreach($types as $type) {
+                                    echo '<option value="'.$type.'"'.($issue['issue_type']==$type?' selected':'').'>'.ucwords(str_replace('_',' ',$type)).'</option>';
+                                }
+                                ?>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <textarea name="edit_description" class="form-control" rows="4" required><?php echo htmlspecialchars($issue['description']); ?></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Priority</label>
+                            <select name="edit_priority" class="form-select" required>
+                                <option value="low" <?php if($issue['priority']=='low') echo 'selected'; ?>>Low</option>
+                                <option value="medium" <?php if($issue['priority']=='medium') echo 'selected'; ?>>Medium</option>
+                                <option value="high" <?php if($issue['priority']=='high') echo 'selected'; ?>>High</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+<?php endforeach; ?>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
 <script>
@@ -643,6 +708,17 @@ document.addEventListener('DOMContentLoaded', function() {
         this.style.height = (this.scrollHeight) + 'px';
     });
 });
+
+<?php if ($open_issue_id): ?>
+document.addEventListener('DOMContentLoaded', function() {
+    var issueCard = document.getElementById('issue-card-<?php echo $open_issue_id; ?>');
+    if (issueCard) {
+        issueCard.scrollIntoView({behavior: "smooth", block: "center"});
+        issueCard.classList.add('highlight');
+        setTimeout(() => issueCard.classList.remove('highlight'), 2000);
+    }
+});
+<?php endif; ?>
 
 // Add smooth scrolling for better UX
 document.querySelectorAll('a[href^="#"]').forEach(anchor => {

@@ -45,6 +45,7 @@ if($_POST && isset($_POST['update_status'])) {
 // Get filter parameters
 $status_filter = $_GET['status'] ?? '';
 $search = $_GET['search'] ?? '';
+$open_request_id = isset($_GET['open_request_id']) ? intval($_GET['open_request_id']) : 0;
 
 // Get all requests
 $all_requests = $laundryRequest->getAllRequests($status_filter);
@@ -226,6 +227,9 @@ $status_options = [
         </a>
         <a class="nav-link active" href="staff_manage_requests.php">
             <i class="fas fa-tasks"></i> Manage Requests
+        </a>
+        <a class="nav-link" href="staff_complaints.php">
+            <i class="fas fa-comments"></i> Student Complaints
         </a>
         <a class="nav-link" href="profile_page.php">
             <i class="fas fa-user"></i> Profile
@@ -514,6 +518,24 @@ function viewDetails(requestId) {
     // This can be expanded to show a detailed view modal
     alert('View details functionality can be implemented here for request #' + requestId);
 }
+
+// Auto-open the update status modal if open_request_id is set
+<?php if ($open_request_id): ?>
+document.addEventListener('DOMContentLoaded', function() {
+    var row = document.querySelector('tr[data-request-id="<?php echo $open_request_id; ?>"]');
+    if (row) {
+        var requestId = row.getAttribute('data-request-id');
+        var currentStatus = row.querySelector('.status-badge').textContent.trim().toLowerCase();
+        var bagNumber = row.children[1].textContent.trim();
+        // Use the same updateStatus function as in your code
+        updateStatus(requestId, currentStatus, bagNumber);
+        // Optionally, scroll to the row
+        row.scrollIntoView({behavior: "smooth", block: "center"});
+        row.classList.add('table-primary');
+        setTimeout(() => row.classList.remove('table-primary'), 2000);
+    }
+});
+<?php endif; ?>
 </script>
 </body>
 </html>

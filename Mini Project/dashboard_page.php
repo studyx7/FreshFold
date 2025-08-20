@@ -38,6 +38,7 @@ $recent_requests = array_slice($user_requests, 0, 3);
     <title>Dashboard - FreshFold</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <meta http-equiv="refresh" content="30">
     <style>
         :root {
             --primary-color: #2c5aa0;
@@ -612,7 +613,7 @@ $recent_requests = array_slice($user_requests, 0, 3);
     <!-- Statistics -->
     <div class="row">
         <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
-            <div class="stat-card" onclick="animateCard(this)">
+            <div class="stat-card" onclick="window.location.href='my_requests_page.php?status=submitted'" style="cursor:pointer;">
                 <div class="stat-card-content text-center">
                     <div class="stat-number" data-target="<?php echo $stats['submitted']; ?>">0</div>
                     <div class="stat-label">Submitted</div>
@@ -620,7 +621,7 @@ $recent_requests = array_slice($user_requests, 0, 3);
             </div>
         </div>
         <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
-            <div class="stat-card" onclick="animateCard(this)">
+            <div class="stat-card" onclick="window.location.href='my_requests_page.php?status=processing'" style="cursor:pointer;">
                 <div class="stat-card-content text-center">
                     <div class="stat-number" data-target="<?php echo $stats['processing']; ?>">0</div>
                     <div class="stat-label">Processing</div>
@@ -628,7 +629,7 @@ $recent_requests = array_slice($user_requests, 0, 3);
             </div>
         </div>
         <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="stat-card" onclick="animateCard(this)">
+            <div class="stat-card" onclick="window.location.href='my_requests_page.php?status=delivered'" style="cursor:pointer;">
                 <div class="stat-card-content text-center">
                     <div class="stat-number" data-target="<?php echo $stats['delivered']; ?>">0</div>
                     <div class="stat-label">Delivered</div>
@@ -637,25 +638,20 @@ $recent_requests = array_slice($user_requests, 0, 3);
         </div>
     </div>
 
+    <!-- Quick Actions -->
     <div class="row">
-        <!-- Quick Actions -->
         <div class="col-md-6">
             <div class="quick-actions">
                 <h5 class="mb-3"><i class="fas fa-bolt me-2"></i>Quick Actions</h5>
-                
                 <a href="new_request_page.php" class="btn-quick-action">
                     <span><i class="fas fa-plus-circle me-2"></i>New Laundry Request</span>
                 </a>
                 <a href="my_requests_page.php" class="btn-quick-action">
                     <span><i class="fas fa-list me-2"></i>View My Requests</span>
                 </a>
-                
-                <?php if($_SESSION['user_type'] == 'staff' || $_SESSION['user_type'] == 'admin'): ?>
-                <a href="manage_requests_page.php" class="btn-quick-action">
-                    <span><i class="fas fa-tasks me-2"></i>Manage Requests</span>
+                <a href="issue_report_page.php" class="btn-quick-action">
+                    <span><i class="fas fa-exclamation-triangle me-2"></i>Report Issue</span>
                 </a>
-                <?php endif; ?>
-                
                 <a href="profile_page.php" class="btn-quick-action">
                     <span><i class="fas fa-user me-2"></i>Update Profile</span>
                 </a>
@@ -695,6 +691,15 @@ $recent_requests = array_slice($user_requests, 0, 3);
                 <?php endif; ?>
             </div>
         </div>
+    </div>
+
+    <!-- Notification Bell -->
+    <div id="notification-bell" style="position:relative; cursor:pointer; margin-top: 20px;">
+        <i class="fas fa-bell fa-lg" style="color: var(--primary-color);"></i>
+        <span id="notification-count" class="badge bg-danger" style="position:absolute; top:-8px; right:-8px; display:none;">0</span>
+    </div>
+    <div id="notification-dropdown" class="dropdown-menu" style="display:none; position:absolute; z-index:2000; min-width:250px; right:0;">
+        <div id="notification-list"></div>
     </div>
 </div>
 
@@ -792,6 +797,42 @@ document.addEventListener('mousemove', (e) => {
     const cursorElement = document.querySelector('.cursor');
     cursorElement.style.transform = `translate(${e.clientX - 10}px, ${e.clientY - 10}px)`;
 });
+
+// Notification fetching
+function fetchNotifications() {
+    fetch('notifications_ajax.php')
+        .then(res => res.json())
+        .then(data => {
+            const list = document.getElementById('notification-list');
+            list.innerHTML = '';
+            data.forEach(n => {
+                const item = document.createElement('div');
+                item.className = 'dropdown-item';
+                item.style.cursor = 'pointer';
+                item.innerHTML = `<strong>${n.title}</strong><br><span class="text-muted">${n.message}</span>`;
+                item.onclick = function() {
+                    fetch('mark_staff_notification_read.php?id=' + n.notification_id);
+                    if (n.target_url) {
+                        window.location.href = n.target_url;
+                    }
+                };
+                list.appendChild(item);
+            });
+            document.getElementById('notification-count').textContent = data.length;
+            document.getElementById('notification-count').style.display = data.length ? 'inline-block' : 'none';
+        });
+}
+setInterval(fetchNotifications, 15000); // Poll every 15 seconds
+fetchNotifications();
+
+document.getElementById('notification-bell').onclick = function(e) {
+    e.stopPropagation();
+    const dropdown = document.getElementById('notification-dropdown');
+    dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+};
+document.body.onclick = function() {
+    document.getElementById('notification-dropdown').style.display = 'none';
+};
 
 // On page load
 window.onload = function() {

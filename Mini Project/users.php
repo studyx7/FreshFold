@@ -202,16 +202,19 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <small>Admin Panel</small>
     </div>
     <nav class="nav flex-column">
-        <a class="nav-link" href="admin_dashboard.php">
+        <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='admin_dashboard.php') echo ' active'; ?>" href="admin_dashboard.php">
             <i class="fas fa-chart-line"></i> Dashboard
         </a>
-        <a class="nav-link" href="admin_manage_requests.php">
+        <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='admin_manage_requests.php') echo ' active'; ?>" href="admin_manage_requests.php">
             <i class="fas fa-tasks"></i> Manage Requests
         </a>
-        <a class="nav-link active" href="users.php">
+        <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='users.php') echo ' active'; ?>" href="users.php">
             <i class="fas fa-users"></i> Users
         </a>
-        <a class="nav-link" href="profile_page.php">
+        <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='admin_issue_management.php') echo ' active'; ?>" href="admin_issue_management.php">
+            <i class="fas fa-exclamation-triangle"></i> Issue Management
+        </a>
+        <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='profile_page.php') echo ' active'; ?>" href="profile_page.php">
             <i class="fas fa-user"></i> Profile
         </a>
         <hr style="border-color: rgba(255,255,255,0.2); margin: 20px;">

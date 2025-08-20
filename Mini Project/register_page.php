@@ -193,26 +193,17 @@ if($_POST) {
                         <h1 class="brand-title">Register</h1>
                         <p class="brand-subtitle">Create your FreshFold account</p>
                     </div>
-                    <?php if($error): ?>
-                    <div class="alert alert-danger" role="alert">
-                        <?php echo $error; ?>
-                    </div>
-                    <?php endif; ?>
-                    <?php if($success): ?>
-                    <div class="alert alert-success" role="alert">
-                        <?php echo $success; ?>
-                        <br><a href="login_page.php" class="btn btn-sm btn-outline-success mt-2">Go to Login</a>
-                    </div>
-                    <?php endif; ?>
-                    <form method="POST">
+                    <form id="registerForm" autocomplete="off">
                         <div class="row">
                             <div class="col-md-6">
+                                <div id="usernameError" class="alert alert-danger py-1 px-2 d-none" style="margin-bottom:6px;"></div>
                                 <div class="form-floating">
                                     <input type="text" class="form-control" id="username" name="username" required>
                                     <label for="username">Username</label>
                                 </div>
                             </div>
                             <div class="col-md-6">
+                                <div id="emailError" class="alert alert-danger py-1 px-2 d-none" style="margin-bottom:6px;"></div>
                                 <div class="form-floating">
                                     <input type="email" class="form-control" id="email" name="email" required>
                                     <label for="email">Email</label>
@@ -272,6 +263,8 @@ if($_POST) {
                             <input type="password" class="form-control" id="password" name="password" required minlength="6">
                             <label for="password">Password (minimum 6 characters)</label>
                         </div>
+                        <div id="registerError" class="alert alert-danger d-none"></div>
+                        <div id="registerSuccess" class="alert alert-success d-none"></div>
                         <div class="d-grid gap-2 mb-3">
                             <button type="submit" class="btn btn-primary btn-lg">
                                 <i class="fas fa-user-plus me-2"></i>Register
@@ -304,6 +297,69 @@ function createParticles() {
     }
 }
 createParticles();
+</script>
+<script>
+document.getElementById('registerForm').onsubmit = function(e) {
+    e.preventDefault();
+    let form = this;
+    let data = new FormData(form);
+    let errorDiv = document.getElementById('registerError');
+    let successDiv = document.getElementById('registerSuccess');
+    errorDiv.classList.add('d-none');
+    successDiv.classList.add('d-none');
+    fetch('ajax_register.php', { method: 'POST', body: data })
+        .then(res => res.json())
+        .then(result => {
+            if(result.success) {
+                successDiv.textContent = result.message;
+                successDiv.classList.remove('d-none');
+                form.reset();
+            } else {
+                errorDiv.textContent = result.error;
+                errorDiv.classList.remove('d-none');
+            }
+        })
+        .catch(() => {
+            errorDiv.textContent = "Network error. Please try again.";
+            errorDiv.classList.remove('d-none');
+        });
+};
+</script>
+<script>
+function checkField(type, value, errorDivId, inputId) {
+    if (!value) {
+        document.getElementById(errorDivId).classList.add('d-none');
+        return;
+    }
+    fetch('ajax_check_user.php', {
+        method: 'POST',
+        headers: {'Content-Type':'application/x-www-form-urlencoded'},
+        body: 'type=' + encodeURIComponent(type) + '&value=' + encodeURIComponent(value)
+    })
+    .then(res => res.json())
+    .then(data => {
+        const errorDiv = document.getElementById(errorDivId);
+        const input = document.getElementById(inputId);
+        if (data.exists) {
+            errorDiv.textContent = type === 'username' ? 'Username already taken.' : 'Email already registered.';
+            errorDiv.classList.remove('d-none');
+            input.classList.add('is-invalid');
+        } else {
+            errorDiv.classList.add('d-none');
+            input.classList.remove('is-invalid');
+        }
+    });
+}
+
+// Check username on blur
+document.getElementById('username').addEventListener('blur', function() {
+    checkField('username', this.value, 'usernameError', 'username');
+});
+
+// Check email on blur
+document.getElementById('email').addEventListener('blur', function() {
+    checkField('email', this.value, 'emailError', 'email');
+});
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
 </body>

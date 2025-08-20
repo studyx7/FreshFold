@@ -47,6 +47,8 @@ $status_options = [
     'processing' => 'Processing',
     'delivered' => 'Delivered'
 ];
+
+$open_request_id = isset($_GET['open_request_id']) ? intval($_GET['open_request_id']) : 0;
 ?>
 
 <!DOCTYPE html>
@@ -287,7 +289,7 @@ $status_options = [
                     </tr>
                     <?php else: ?>
                     <?php foreach($all_requests as $request): ?>
-                    <tr>
+                    <tr data-request-id="<?php echo $request['request_id']; ?>">
                         <td><strong>#<?php echo $request['request_id']; ?></strong></td>
                         <td><?php echo $request['bag_number']; ?></td>
                         <td>
@@ -378,6 +380,19 @@ function viewDetails(requestId) {
     // This can be expanded to show a detailed view modal
     alert('View details functionality can be implemented here for request #' + requestId);
 }
+
+<?php if ($open_request_id): ?>
+document.addEventListener('DOMContentLoaded', function() {
+    var row = document.querySelector('tr[data-request-id="<?php echo $open_request_id; ?>"]');
+    if (row) {
+        row.scrollIntoView({behavior: "smooth", block: "center"});
+        row.classList.add('table-primary');
+        setTimeout(() => row.classList.remove('table-primary'), 2000);
+        // Optionally, open modal for details
+        // updateStatus(<?php echo $open_request_id; ?>, ...);
+    }
+});
+<?php endif; ?>
 </script>
 </body>
 </html>
