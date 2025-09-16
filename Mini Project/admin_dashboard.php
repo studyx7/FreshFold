@@ -29,6 +29,12 @@ $total_requests = $stmt->fetchColumn();
 // Count delivered requests
 $stmt = $db->query("SELECT COUNT(*) FROM laundry_requests WHERE status = 'delivered'");
 $total_delivered = $stmt->fetchColumn();
+
+$feedbacks = $db->query("SELECT f.*, u.full_name, lr.bag_number 
+    FROM feedback f 
+    JOIN users u ON f.student_id = u.user_id 
+    JOIN laundry_requests lr ON f.request_id = lr.request_id 
+    ORDER BY f.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <!DOCTYPE html>
@@ -432,6 +438,103 @@ $total_delivered = $stmt->fetchColumn();
         </div>
     </div>
 
+    <!-- Student Feedback Section -->
+    <div class="card mt-4 shadow-lg border-0 feedback-card" style="background: rgba(255,255,255,0.98); border-radius: 32px; box-shadow: 0 16px 48px rgba(44,90,160,0.15);">
+        <div class="card-header text-white d-flex align-items-center" style="
+            border-radius: 32px 32px 0 0;
+            background: linear-gradient(90deg, #23d5ab 0%, #23a6d5 100%);
+            box-shadow: 0 4px 16px rgba(44,90,160,0.12);
+            font-size: 1.35rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            min-height: 64px;
+            display: flex;
+            align-items: center;
+        ">
+            <i class="fas fa-comment-dots me-3 fa-lg"></i>
+            <span>Student Feedback</span>
+            <span class="ms-auto badge rounded-pill bg-light text-teal px-4 py-2" style="font-size:1.05rem;box-shadow:0 2px 8px #23d5ab22; color:#23d5ab;">
+                <?php echo count($feedbacks); ?> Feedbacks
+            </span>
+        </div>
+        <div class="card-body px-0 pt-0 pb-4">
+            <?php if(empty($feedbacks)): ?>
+                <div class="text-muted text-center py-5" style="font-size: 1.18rem;">
+                    <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                    <div>No feedback submitted yet.</div>
+                </div>
+            <?php else: ?>
+                <div class="table-responsive px-3">
+                    <table class="table table-hover align-middle mb-0" style="border-radius: 0 0 32px 32px; overflow: hidden; background: transparent;">
+                        <thead style="background: linear-gradient(90deg, #eafaf1 0%, #d3f9f7 100%);">
+                            <tr>
+                                <th style="width: 110px; border: none;">Request</th>
+                                <th style="width: 140px; border: none;">Bag</th>
+                                <th style="width: 180px; border: none;">Student</th>
+                                <th style="border: none;">Feedback</th>
+                                <th style="width: 170px; border: none;">Submitted</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach($feedbacks as $fb): ?>
+                            <tr class="feedback-row" style="transition: background 0.2s;">
+                                <td>
+                                    <span class="badge rounded-pill" style="background: linear-gradient(90deg, #23d5ab 0%, #23a6d5 100%); color: #fff; font-size:1rem; box-shadow:0 2px 8px #23d5ab22;">
+                                        #<?php echo $fb['request_id']; ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="fw-semibold text-primary"><?php echo htmlspecialchars($fb['bag_number']); ?></span>
+                                </td>
+                                <td>
+                                    <strong><?php echo htmlspecialchars($fb['full_name']); ?></strong><br>
+                                    <small class="text-muted"><?php echo date('M j, Y', strtotime($fb['created_at'])); ?></small>
+                                </td>
+                                <td>
+                                    <div class="p-3 rounded-4 shadow-sm feedback-bubble" style="
+                                        background: linear-gradient(90deg, #f8f9fa 60%, #eafaf1 100%);
+                                        border-left: 5px solid #23d5ab;
+                                        font-size: 1.09rem;
+                                        position: relative;
+                                        min-width: 180px;
+                                        box-shadow: 0 2px 12px #23d5ab11;
+                                        transition: box-shadow 0.2s, background 0.2s;
+                                    ">
+                                        <i class="fas fa-quote-left" style="color:#23d5ab; opacity:0.5;" class="me-2"></i>
+                                        <?php echo nl2br(htmlspecialchars($fb['feedback_text'])); ?>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge rounded-pill bg-secondary text-dark px-4 py-2" style="font-size:1rem;box-shadow:0 2px 8px #23d5ab22;">
+                                        <?php echo date('M j, Y H:i', strtotime($fb['created_at'])); ?>
+                                    </span>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+    <style>
+    .feedback-card {
+        animation: fadeInUp 0.8s cubic-bezier(.42,.65,.27,.99);
+    }
+    @keyframes fadeInUp {
+        0% { opacity: 0; transform: translateY(40px);}
+        100% { opacity: 1; transform: translateY(0);}
+    }
+    .feedback-row:hover .feedback-bubble {
+        box-shadow: 0 8px 32px rgba(35,213,171,0.18), 0 0 0 2px #23d5ab33;
+        background: linear-gradient(90deg, #eafaf1 60%, #f8f9fa 100%);
+        transition: box-shadow 0.2s, background 0.2s;
+    }
+    .feedback-bubble {
+        transition: box-shadow 0.2s, background 0.2s;
+    }
+    .text-teal { color: #23d5ab !important; }
+    </style>
     <!-- Add more admin widgets or quick links here -->
 </div>
 

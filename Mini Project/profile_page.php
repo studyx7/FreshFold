@@ -609,24 +609,65 @@ $recent_request = !empty($user_requests) ? $user_requests[0] : null;
     <div class="brand">
         <i class="fas fa-tshirt fa-2x mb-2"></i>
         <h4>FreshFold</h4>
-        <small>Admin Panel</small>
+        <small>
+            <?php
+            if ($_SESSION['user_type'] === 'admin') {
+                echo "Admin Panel";
+            } elseif ($_SESSION['user_type'] === 'staff') {
+                echo "Staff Panel";
+            } else {
+                echo "Laundry Management";
+            }
+            ?>
+        </small>
     </div>
     <nav class="nav flex-column">
-        <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='admin_dashboard.php') echo ' active'; ?>" href="admin_dashboard.php">
-            <i class="fas fa-chart-line"></i> Dashboard
-        </a>
-        <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='admin_manage_requests.php') echo ' active'; ?>" href="admin_manage_requests.php">
-            <i class="fas fa-tasks"></i> Manage Requests
-        </a>
-        <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='users.php') echo ' active'; ?>" href="users.php">
-            <i class="fas fa-users"></i> Users
-        </a>
-        <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='admin_issue_management.php') echo ' active'; ?>" href="admin_issue_management.php">
-            <i class="fas fa-exclamation-triangle"></i> Issue Management
-        </a>
-        <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='profile_page.php') echo ' active'; ?>" href="profile_page.php">
-            <i class="fas fa-user"></i> Profile
-        </a>
+        <?php if ($_SESSION['user_type'] === 'admin'): ?>
+            <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='admin_dashboard.php') echo ' active'; ?>" href="admin_dashboard.php">
+                <i class="fas fa-chart-line"></i> Dashboard
+            </a>
+            <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='admin_manage_requests.php') echo ' active'; ?>" href="admin_manage_requests.php">
+                <i class="fas fa-tasks"></i> Manage Requests
+            </a>
+            <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='users.php') echo ' active'; ?>" href="users.php">
+                <i class="fas fa-users"></i> Users
+            </a>
+            <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='admin_issue_management.php') echo ' active'; ?>" href="admin_issue_management.php">
+                <i class="fas fa-exclamation-triangle"></i> Issue Management
+            </a>
+            <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='profile_page.php') echo ' active'; ?>" href="profile_page.php">
+                <i class="fas fa-user"></i> Profile
+            </a>
+        <?php elseif ($_SESSION['user_type'] === 'staff'): ?>
+            <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='staff_dashboard.php') echo ' active'; ?>" href="staff_dashboard.php">
+                <i class="fas fa-chart-line"></i> Dashboard
+            </a>
+            <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='staff_manage_requests.php') echo ' active'; ?>" href="staff_manage_requests.php">
+                <i class="fas fa-tasks"></i> Manage Requests
+            </a>
+            <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='staff_complaints.php') echo ' active'; ?>" href="staff_complaints.php">
+                <i class="fas fa-comments"></i> Student Complaints
+            </a>
+            <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='profile_page.php') echo ' active'; ?>" href="profile_page.php">
+                <i class="fas fa-user"></i> Profile
+            </a>
+        <?php else: ?>
+            <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='dashboard_page.php') echo ' active'; ?>" href="dashboard_page.php">
+                <i class="fas fa-home"></i> Dashboard
+            </a>
+            <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='new_request_page.php') echo ' active'; ?>" href="new_request_page.php">
+                <i class="fas fa-plus-circle"></i> New Request
+            </a>
+            <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='my_requests_page.php') echo ' active'; ?>" href="my_requests_page.php">
+                <i class="fas fa-list"></i> My Requests
+            </a>
+            <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='issue_report_page.php') echo ' active'; ?>" href="issue_report_page.php">
+                <i class="fas fa-exclamation-triangle"></i> Report Issue
+            </a>
+            <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='profile_page.php') echo ' active'; ?>" href="profile_page.php">
+                <i class="fas fa-user"></i> Profile
+            </a>
+        <?php endif; ?>
         <hr style="border-color: rgba(255,255,255,0.2); margin: 20px;">
         <a class="nav-link" href="logout.php" onclick="return confirm('Are you sure you want to logout?')">
             <i class="fas fa-sign-out-alt"></i> Logout

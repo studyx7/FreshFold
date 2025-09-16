@@ -13,6 +13,19 @@ $user_requests = $laundryRequest->getStudentRequests($_SESSION['user_id']);
 // For admin: Get all requests with optional status filter
 $status_filter = isset($_GET['status']) ? $_GET['status'] : '';
 $all_requests = $laundryRequest->getAllRequests($status_filter);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['feedback_request_id'])) {
+    $feedback_request_id = intval($_POST['feedback_request_id']);
+    $feedback_text = trim($_POST['feedback_text']);
+    if ($feedback_text !== '') {
+        $stmt = $db->prepare("INSERT INTO feedback (request_id, student_id, feedback_text, created_at) VALUES (?, ?, ?, NOW())");
+        $stmt->execute([$feedback_request_id, $_SESSION['user_id'], $feedback_text]);
+        showAlert('Thank you for your feedback!', 'success');
+    } else {
+        showAlert('No feedback entered. Nothing was submitted.', 'info');
+    }
+    redirect('my_requests_page.php');
+}
 ?>
 
 <!DOCTYPE html>
@@ -372,7 +385,7 @@ $all_requests = $laundryRequest->getAllRequests($status_filter);
     <div class="row">
         <?php foreach($user_requests as $request): ?>
         <div class="col-md-6">
-            <div class="request-card">
+            <div class="request-card" id="request-card-<?php echo $request['request_id']; ?>">
                 <div class="d-flex justify-content-between align-items-start mb-3">
                     <div>
                         <h5 class="mb-1">Request #<?php echo $request['request_id']; ?></h5>
@@ -428,12 +441,39 @@ $all_requests = $laundryRequest->getAllRequests($status_filter);
                 <div class="text-muted small mt-3">
                     Last updated: <?php echo date('M j, Y g:i A', strtotime($request['updated_at'])); ?>
                 </div>
+
+                <?php if($request['status'] === 'delivered'): ?>
+                    <button class="btn btn-outline-success btn-sm mt-2" onclick="openFeedbackModal(<?php echo $request['request_id']; ?>)">Give Feedback</button>
+                <?php endif; ?>
             </div>
         </div>
         <?php endforeach; ?>
     </div>
 
     <?php endif; ?>
+</div>
+
+<!-- Feedback Modal -->
+<div class="modal fade" id="feedbackModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="feedbackForm" method="POST">
+                <input type="hidden" name="feedback_request_id" id="feedback_request_id">
+                <div class="modal-header">
+                    <h5 class="modal-title">Give Feedback</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <label for="feedback_text" class="form-label">Your feedback (optional):</label>
+                    <textarea class="form-control" name="feedback_text" id="feedback_text" rows="3" maxlength="500" placeholder="Share your experience..."></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Submit Feedback</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
@@ -474,6 +514,38 @@ function addScrollAnimations() {
     });
 }
 document.addEventListener('DOMContentLoaded', addScrollAnimations);
+
+// Open feedback modal
+function openFeedbackModal(requestId) {
+    document.getElementById('feedback_request_id').value = requestId;
+    document.getElementById('feedback_text').value = '';
+    var modal = new bootstrap.Modal(document.getElementById('feedbackModal'));
+    modal.show();
+}
+
+// Handle feedback form submission
+document.getElementById('feedbackForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    fetch('submit_feedback.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if(data.success) {
+            alert('Feedback submitted successfully!');
+            const modal = bootstrap.Modal.getInstance(document.getElementById('feedbackModal'));
+            modal.hide();
+        } else {
+            alert('Error submitting feedback. Please try again.');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error submitting feedback. Please try again.');
+    });
+});
 </script>
 </body>
 </html>
