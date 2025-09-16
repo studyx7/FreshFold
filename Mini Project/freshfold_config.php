@@ -19,7 +19,8 @@ class Database {
             );
             $this->conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         } catch(PDOException $exception) {
-            echo "Connection error: " . $exception->getMessage();
+            // Show a user-friendly error and stop execution
+            die("Database connection error: " . $exception->getMessage() . "<br>Please check if MySQL/XAMPP is running and your DB credentials are correct.");
         }
         return $this->conn;
     }

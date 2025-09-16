@@ -203,9 +203,10 @@ if($_POST) {
                                 </div>
                             </div>
                             <div class="col-md-6">
+                                <!-- Email Field -->
                                 <div id="emailError" class="alert alert-danger py-1 px-2 d-none" style="margin-bottom:6px;"></div>
                                 <div class="form-floating">
-                                    <input type="email" class="form-control" id="email" name="email" required>
+                                    <input type="email" class="form-control" id="email" name="email" required pattern="[^@]+@[^@]+\.[^@]+" title="Enter a valid email address">
                                     <label for="email">Email</label>
                                 </div>
                             </div>
@@ -218,8 +219,9 @@ if($_POST) {
                                 </div>
                             </div>
                             <div class="col-md-6">
+                                <!-- Phone Number Field -->
                                 <div class="form-floating">
-                                    <input type="tel" class="form-control" id="phone" name="phone" required>
+                                    <input type="tel" class="form-control" id="phone" name="phone" required maxlength="10" pattern="\d{10}" title="Enter a 10-digit phone number" inputmode="numeric">
                                     <label for="phone">Phone Number</label>
                                 </div>
                             </div>
