@@ -3,17 +3,25 @@ require_once 'freshfold_config.php';
 requireLogin();
 requireUserType('student');
 
-$error = '';
-$success = '';
-
-// Get student gender
 $database = new Database();
 $db = $database->getConnection();
 $user = new User($db);
 $current_user = $user->getUserById($_SESSION['user_id']);
-$gender = $current_user['gender'] ?? 'male'; // fallback to male
+$gender = $current_user['gender'] ?? 'male';
 
-// Define laundry items for boys and girls
+// CRITICAL: Check payment status before allowing access
+$current_year = date('Y');
+$stmt = $db->prepare("SELECT payment_status, payment_year FROM users WHERE user_id = ?");
+$stmt->execute([$_SESSION['user_id']]);
+$payment_info = $stmt->fetch(PDO::FETCH_ASSOC);
+$is_paid = ($payment_info && $payment_info['payment_status'] === 'Paid' && (int)$payment_info['payment_year'] == (int)$current_year);
+
+// If not paid, show the payment required modal (handled in JavaScript)
+$show_payment_modal = !$is_paid;
+
+$error = '';
+$success = '';
+
 $boy_items = [
     "Shirt", "Pants", "Jeans", "T. Shirts", "Play Pant", "Bermuda", "Inner (Ban)", "Bedsheet", "Blanket", "Lunkey", "Over Coat", "Thorth", "Turkey", "Pillow", "Sweater"
 ];
@@ -21,22 +29,16 @@ $girl_items = [
     "Churidar Top", "Churidar Pant", "Churidar Shalls", "Pants", "Shirts", "T. Shirts", "Over Coat", "Top", "Play Pant", "Bermuda", "Saree", "Midi", "Turkey", "Thorth", "Sweates", "Bedsheet", "Blanket", "Pillow", "Shimmies"
 ];
 
-// Calculate pickup date logic
 function getPickupDate($db) {
     $today = date('Y-m-d');
-    // Count requests for today
     $stmt = $db->prepare("SELECT COUNT(*) FROM laundry_requests WHERE created_at >= ? AND created_at < ?");
     $stmt->execute([
         $today . " 00:00:00",
         $today . " 23:59:59"
     ]);
     $today_requests = $stmt->fetchColumn();
-
-    // If more than 30 requests today, add 4 days, else 3 days
     $days_to_add = ($today_requests >= 30) ? 4 : 3;
     $pickup_date = date('Y-m-d', strtotime("+$days_to_add days"));
-
-    // If pickup date is Sunday, move to Monday
     while (date('w', strtotime($pickup_date)) == 0) {
         $pickup_date = date('Y-m-d', strtotime($pickup_date . ' +1 day'));
     }
@@ -45,37 +47,39 @@ function getPickupDate($db) {
 
 $calculated_pickup_date = getPickupDate($db);
 
-// Handle form submission
+// Handle form submission - ONLY if payment is confirmed
 if($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $pickup_date = $_POST['pickup_date']; // hidden field, not editable
-    $special_instructions = $_POST['special_instructions'] ?? '';
-    $items = $_POST['items'] ?? [];
-    $total_items = array_sum($items);
-
-    // Validate total items
-    if($total_items > 20) {
-        $error = 'You cannot submit more than 20 clothes in a single request.';
-    } elseif($total_items < 1) {
-        $error = 'Please enter at least one item.';
+    // Double-check payment status on submission
+    if (!$is_paid) {
+        $error = 'Payment required. Please complete your annual fee payment before submitting a request.';
     } else {
-        // Create laundry request
-        $laundryRequest = new LaundryRequest($db);
-        $request_id = $laundryRequest->createRequest($_SESSION['user_id'], $pickup_date, $special_instructions);
+        $pickup_date = $_POST['pickup_date'];
+        $special_instructions = $_POST['special_instructions'] ?? '';
+        $items = $_POST['items'] ?? [];
+        $total_items = array_sum($items);
 
-        if($request_id) {
-            // Insert items
-            $item_names = ($gender === 'female') ? $girl_items : $boy_items;
-            foreach($items as $idx => $qty) {
-                $qty = intval($qty);
-                if($qty > 0 && isset($item_names[$idx])) {
-                    $stmt = $db->prepare("INSERT INTO laundry_items (request_id, item_type, quantity) VALUES (?, ?, ?)");
-                    $stmt->execute([$request_id, $item_names[$idx], $qty]);
-                }
-            }
-            showAlert('Laundry request created successfully! Your request ID is #' . $request_id, 'success');
-            redirect('my_requests_page.php');
+        if($total_items > 20) {
+            $error = 'You cannot submit more than 20 clothes in a single request.';
+        } elseif($total_items < 1) {
+            $error = 'Please enter at least one item.';
         } else {
-            $error = 'Failed to create request. Please try again.';
+            $laundryRequest = new LaundryRequest($db);
+            $request_id = $laundryRequest->createRequest($_SESSION['user_id'], $pickup_date, $special_instructions);
+
+            if($request_id) {
+                $item_names = ($gender === 'female') ? $girl_items : $boy_items;
+                foreach($items as $idx => $qty) {
+                    $qty = intval($qty);
+                    if($qty > 0 && isset($item_names[$idx])) {
+                        $stmt = $db->prepare("INSERT INTO laundry_items (request_id, item_type, quantity) VALUES (?, ?, ?)");
+                        $stmt->execute([$request_id, $item_names[$idx], $qty]);
+                    }
+                }
+                showAlert('Laundry request created successfully! Your request ID is #' . $request_id, 'success');
+                redirect('my_requests_page.php');
+            } else {
+                $error = 'Failed to create request. Please try again.';
+            }
         }
     }
 }
@@ -283,6 +287,217 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
             font-size: 1rem;
             margin-bottom: 18px;
         }
+
+        /* Premium Payment Required Modal */
+        .payment-required-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+        .payment-required-modal.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .payment-modal-backdrop {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            animation: fadeIn 0.4s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .payment-modal-container {
+            position: relative;
+            width: 90%;
+            max-width: 520px;
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 28px;
+            overflow: hidden;
+            transform: scale(0.8) translateY(40px);
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.25), 0 15px 30px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+        }
+        .payment-required-modal.show .payment-modal-container {
+            transform: scale(1) translateY(0);
+        }
+        .payment-modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 32px 28px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .payment-modal-header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%);
+            animation: rotate 15s linear infinite;
+        }
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .payment-modal-icon {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 18px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            animation: bounce 1.5s ease infinite;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .payment-modal-icon i {
+            font-size: 2.5rem;
+            color: white;
+            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+        }
+        .payment-modal-title {
+            position: relative;
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: white;
+            margin: 0 0 8px 0;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+        .payment-modal-subtitle {
+            position: relative;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 1rem;
+            margin: 0;
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+        }
+        .payment-modal-body {
+            padding: 32px 28px;
+        }
+        .payment-info-card {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+        .payment-info-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        }
+        .payment-info-item:last-child {
+            border-bottom: none;
+        }
+        .payment-info-label {
+            color: #6c757d;
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+        .payment-info-value {
+            color: #2c3e50;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+        .payment-info-value.unpaid {
+            color: #dc3545;
+        }
+        .payment-modal-message {
+            text-align: center;
+            color: #495057;
+            font-size: 1rem;
+            line-height: 1.6;
+            margin-bottom: 24px;
+        }
+        .payment-modal-actions {
+            display: flex;
+            gap: 12px;
+        }
+        .payment-action-btn {
+            flex: 1;
+            padding: 14px 20px;
+            border-radius: 14px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .payment-action-btn.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        .payment-action-btn.primary:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
+            color: white;
+            text-decoration: none;
+        }
+        .payment-action-btn.secondary {
+            background: #f8f9fa;
+            color: #495057;
+            border: 2px solid #dee2e6;
+        }
+        .payment-action-btn.secondary:hover {
+            background: #e9ecef;
+            border-color: #adb5bd;
+            transform: translateY(-2px);
+            color: #495057;
+            text-decoration: none;
+        }
+
+        /* Form overlay when payment is required */
+        .form-disabled-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(3px);
+            z-index: 100;
+            display: none;
+            border-radius: 20px;
+        }
+        .form-disabled-overlay.active {
+            display: block;
+        }
+
         @media (max-width: 768px) {
             .sidebar {
                 transform: translateX(-100%);
@@ -296,6 +511,19 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             .particles {
                 display: none;
+            }
+            .payment-modal-container {
+                width: 95%;
+                max-width: 95%;
+            }
+            .payment-modal-header {
+                padding: 24px 20px;
+            }
+            .payment-modal-body {
+                padding: 24px 20px;
+            }
+            .payment-modal-actions {
+                flex-direction: column;
             }
         }
     </style>
@@ -321,6 +549,9 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
         <a class="nav-link" href="issue_report_page.php">
             <i class="fas fa-exclamation-triangle"></i> Report Issue
         </a>
+        <a class="nav-link" href="payment_tab.php">
+            <i class="fas fa-credit-card"></i> Payment
+        </a>
         <a class="nav-link" href="profile_page.php">
             <i class="fas fa-user"></i> Profile
         </a>
@@ -331,7 +562,11 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
     </nav>
 </div>
 <div class="main-content">
-    <div class="request-card">
+    <div class="request-card" style="position: relative;">
+        <?php if ($show_payment_modal): ?>
+        <div class="form-disabled-overlay active"></div>
+        <?php endif; ?>
+
         <h2 class="mb-4"><i class="fas fa-plus-circle me-2"></i>New Laundry Request</h2>
         <?php if($error): ?>
             <div class="alert alert-danger"><?php echo $error; ?></div>
@@ -384,7 +619,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <textarea class="form-control" id="special_instructions" name="special_instructions" rows="3"></textarea>
             </div>
             <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-primary btn-lg flex-fill">
+                <button type="submit" class="btn btn-primary btn-lg flex-fill" id="submitBtn">
                     Submit Request
                 </button>
                 <a href="dashboard_page.php" class="btn btn-outline-secondary btn-lg flex-fill">Cancel</a>
@@ -392,7 +627,56 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
         </form>
     </div>
 </div>
+
+<!-- Premium Payment Required Modal -->
+<?php if ($show_payment_modal): ?>
+<div class="payment-required-modal show" id="paymentModal">
+    <div class="payment-modal-backdrop"></div>
+    <div class="payment-modal-container">
+        <div class="payment-modal-header">
+            <div class="payment-modal-icon">
+                <i class="fas fa-lock"></i>
+            </div>
+            <h3 class="payment-modal-title">Payment Required</h3>
+            <p class="payment-modal-subtitle">Complete your annual fee to continue</p>
+        </div>
+        <div class="payment-modal-body">
+            <div class="payment-info-card">
+                <div class="payment-info-item">
+                    <span class="payment-info-label">Payment Status</span>
+                    <span class="payment-info-value unpaid">
+                        <i class="fas fa-times-circle"></i> Not Paid
+                    </span>
+                </div>
+                <div class="payment-info-item">
+                    <span class="payment-info-label">Academic Year</span>
+                    <span class="payment-info-value"><?php echo $current_year; ?></span>
+                </div>
+                <div class="payment-info-item">
+                    <span class="payment-info-label">Annual Fee</span>
+                    <span class="payment-info-value">₹8,500</span>
+                </div>
+            </div>
+            <p class="payment-modal-message">
+                To submit a new laundry request, you need to complete your annual laundry service fee payment for <?php echo $current_year; ?>. This one-time payment covers all laundry services for the entire academic year.
+            </p>
+            <div class="payment-modal-actions">
+                <a href="payment_tab.php" class="payment-action-btn primary">
+                    <i class="fas fa-credit-card"></i>
+                    <span>Pay Now</span>
+                </a>
+                <a href="dashboard_page.php" class="payment-action-btn secondary">
+                    <i class="fas fa-arrow-left"></i>
+                    <span>Go Back</span>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+<script src="custom_alerts.js"></script>
 <script>
 function createParticles() {
     const particlesContainer = document.getElementById('particles');
@@ -413,6 +697,25 @@ const qtyInputs = document.querySelectorAll('.item-qty');
 const totalQty = document.getElementById('totalQty');
 const totalWarning = document.getElementById('totalWarning');
 const form = document.getElementById('laundryForm');
+const isPaymentRequired = <?php echo $show_payment_modal ? 'true' : 'false'; ?>;
+
+// Disable form submission if payment is required
+if (isPaymentRequired) {
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        // Direct redirect to payment page without alert
+        window.location.href = 'payment_tab.php';
+        return false;
+    });
+    
+    // Disable all form inputs
+    const allInputs = form.querySelectorAll('input, textarea, button[type="submit"]');
+    allInputs.forEach(input => {
+        if (input.type !== 'button' && !input.classList.contains('btn-outline-secondary')) {
+            input.disabled = true;
+        }
+    });
+}
 
 function updateTotal() {
     let total = 0;
@@ -433,6 +736,11 @@ qtyInputs.forEach(input => {
 });
 
 form.addEventListener('submit', function(e) {
+    if (isPaymentRequired) {
+        e.preventDefault();
+        return false;
+    }
+    
     let total = 0;
     qtyInputs.forEach(input => {
         let val = parseInt(input.value) || 0;
@@ -446,6 +754,76 @@ form.addEventListener('submit', function(e) {
         e.preventDefault();
     }
 });
+
+// Notification fetching
+function fetchNotifications() {
+    fetch('notifications_ajax.php')
+        .then(res => res.json())
+        .then(data => {
+            const list = document.getElementById('notification-list');
+            if (list) {
+                list.innerHTML = '';
+                data.forEach(n => {
+                    const item = document.createElement('div');
+                    item.className = 'dropdown-item';
+                    item.style.cursor = 'pointer';
+                    item.innerHTML = `<strong>${n.title}</strong><br><span class="text-muted">${n.message}</span>`;
+                    item.onclick = function() {
+                        // Mark as read
+                        fetch('notifications_ajax.php', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                            body: 'action=mark_read&notification_id=' + n.notification_id
+                        });
+                        // Direct redirect without alert
+                        if (n.target_url) {
+                            window.location.href = n.target_url;
+                        }
+                    };
+                    list.appendChild(item);
+                });
+                const countEl = document.getElementById('notification-count');
+                if (countEl) {
+                    countEl.textContent = data.length;
+                    countEl.style.display = data.length ? 'inline-block' : 'none';
+                }
+            }
+        })
+        .catch(error => console.error('Notification fetch error:', error));
+}
+
+// Only fetch notifications if elements exist
+if (document.getElementById('notification-bell')) {
+    setInterval(fetchNotifications, 15000);
+    fetchNotifications();
+    
+    document.getElementById('notification-bell').onclick = function(e) {
+        e.stopPropagation();
+        const dropdown = document.getElementById('notification-dropdown');
+        if (dropdown) {
+            dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+        }
+    };
+    
+    document.body.onclick = function() {
+        const dropdown = document.getElementById('notification-dropdown');
+        if (dropdown) {
+            dropdown.style.display = 'none';
+        }
+    };
+}
+
+// Close modal on backdrop click (optional, if you want this functionality)
+const paymentModal = document.getElementById('paymentModal');
+if (paymentModal) {
+    const backdrop = paymentModal.querySelector('.payment-modal-backdrop');
+    if (backdrop) {
+        backdrop.addEventListener('click', function(e) {
+            // Prevent closing - force user to make a choice
+            e.stopPropagation();
+        });
+    }
+}
 </script>
 </body>
 </html>

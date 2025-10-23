@@ -184,6 +184,7 @@ $open_request_id = isset($_GET['open_request_id']) ? intval($_GET['open_request_
         <a class="nav-link" href="profile_page.php">
             <i class="fas fa-user"></i> Profile
         </a>
+        
         <hr style="border-color: rgba(255,255,255,0.2); margin: 20px;">
         <a class="nav-link" href="logout.php" onclick="return confirm('Are you sure you want to logout?')">
             <i class="fas fa-sign-out-alt"></i> Logout

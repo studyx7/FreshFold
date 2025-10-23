@@ -305,6 +305,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reply_issue'])) {
         <a class="nav-link" href="admin_manage_requests.php"><i class="fas fa-tasks"></i> Manage Requests</a>
         <a class="nav-link" href="users.php"><i class="fas fa-users"></i> Users</a>
         <a class="nav-link active" href="admin_issue_management.php"><i class="fas fa-exclamation-triangle"></i> Issue Management</a>
+        <a class="nav-link" href="admin_payments.php"><i class="fas fa-credit-card"></i> Payment Management</a>
         <a class="nav-link" href="profile_page.php"><i class="fas fa-user"></i> Profile</a>
         <hr style="border-color: rgba(255,255,255,0.2); margin: 20px;">
         <a class="nav-link" href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>

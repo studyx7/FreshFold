@@ -30,6 +30,53 @@ $total_requests = $stmt->fetchColumn();
 $stmt = $db->query("SELECT COUNT(*) FROM laundry_requests WHERE status = 'delivered'");
 $total_delivered = $stmt->fetchColumn();
 
+// Get payment statistics using existing PaymentUtils
+require_once 'payment_utils.php';
+$paymentUtils = new PaymentUtils();
+$current_year = date('Y');
+
+// Initialize payment system to ensure tables exist
+$paymentUtils->initializePaymentSystem();
+
+// Check if student_payments table exists (for payment stats)
+$table_exists = false;
+try {
+    $stmt = $db->query("SHOW TABLES LIKE 'student_payments'");
+    $table_exists = $stmt->rowCount() > 0;
+} catch (Exception $e) {
+    // Table doesn't exist yet
+}
+
+$payment_stats = null;
+if ($table_exists) {
+    // Get payment statistics using the existing table structure
+    $stmt = $db->prepare("SELECT COUNT(*) FROM student_payments WHERE academic_year = ? AND payment_status = 'completed'");
+    $stmt->execute([$current_year]);
+    $paid_students = $stmt->fetchColumn();
+    
+    $stmt = $db->prepare("SELECT COALESCE(SUM(amount), 0) FROM student_payments WHERE academic_year = ? AND payment_status = 'completed'");
+    $stmt->execute([$current_year]);
+    $total_collected = $stmt->fetchColumn();
+    
+    $pending_students = $total_students - $paid_students;
+    $payment_rate = $total_students > 0 ? round(($paid_students / $total_students) * 100, 1) : 0;
+    
+    $payment_stats = [
+        'paid_students' => $paid_students,
+        'pending_students' => $pending_students,
+        'total_collected' => $total_collected,
+        'payment_rate' => $payment_rate
+    ];
+} else {
+    // Default values when payment system is not set up yet
+    $payment_stats = [
+        'paid_students' => 0,
+        'pending_students' => $total_students,
+        'total_collected' => 0,
+        'payment_rate' => 0
+    ];
+}
+
 $feedbacks = $db->query("SELECT f.*, u.full_name, lr.bag_number 
     FROM feedback f 
     JOIN users u ON f.student_id = u.user_id 
@@ -333,6 +380,23 @@ $feedbacks = $db->query("SELECT f.*, u.full_name, lr.bag_number
         ::-webkit-scrollbar-thumb:hover {
             background: rgba(255,255,255,0.5);
         }
+        .clickable-tile {
+            cursor: pointer;
+            transition: box-shadow 0.2s, transform 0.2s;
+        }
+        .clickable-tile:hover {
+            box-shadow: 0 25px 50px rgba(44,90,160,0.18), 0 0 0 2px #23d5ab33;
+            transform: translateY(-8px) scale(1.03);
+        }
+        .payment-overview {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 30px;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -365,6 +429,9 @@ $feedbacks = $db->query("SELECT f.*, u.full_name, lr.bag_number
         <a class="nav-link" href="admin_issue_management.php">
             <i class="fas fa-exclamation-triangle"></i> Issue Management
         </a>
+        <a class="nav-link" href="admin_payments.php">
+            <i class="fas fa-credit-card"></i> Payment Management
+        </a>
         <a class="nav-link" href="profile_page.php">
             <i class="fas fa-user"></i> Profile
         </a>
@@ -394,10 +461,40 @@ $feedbacks = $db->query("SELECT f.*, u.full_name, lr.bag_number
         </div>
     </div>
 
+    <!-- Payment Overview -->
+    <?php if ($payment_stats): ?>
+    <div class="payment-overview">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4>Payment Overview - <?php echo $current_year; ?></h4>
+            <a href="admin_payments.php" class="btn btn-outline-light btn-sm">
+                <i class="fas fa-external-link-alt"></i> Manage Payments
+            </a>
+        </div>
+        <div class="row">
+            <div class="col-md-3 text-center">
+                <div class="h5 mb-1"><?php echo $payment_stats['paid_students']; ?></div>
+                <small class="opacity-75">Students Paid</small>
+            </div>
+            <div class="col-md-3 text-center">
+                <div class="h5 mb-1"><?php echo $payment_stats['pending_students']; ?></div>
+                <small class="opacity-75">Pending Payments</small>
+            </div>
+            <div class="col-md-3 text-center">
+                <div class="h5 mb-1">₹<?php echo number_format($payment_stats['total_collected'], 0); ?></div>
+                <small class="opacity-75">Total Collected</small>
+            </div>
+            <div class="col-md-3 text-center">
+                <div class="h5 mb-1"><?php echo $payment_stats['payment_rate']; ?>%</div>
+                <small class="opacity-75">Payment Rate</small>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <!-- Statistics -->
     <div class="row">
         <div class="col-lg-3 col-md-6 mb-3">
-            <div class="stat-card">
+            <div class="stat-card clickable-tile" onclick="window.location.href='users.php'">
                 <div class="stat-card-content text-center">
                     <div class="stat-number"><?php echo $total_users; ?></div>
                     <div class="stat-label">Total Users</div>
@@ -405,7 +502,7 @@ $feedbacks = $db->query("SELECT f.*, u.full_name, lr.bag_number
             </div>
         </div>
         <div class="col-lg-3 col-md-6 mb-3">
-            <div class="stat-card">
+            <div class="stat-card clickable-tile" onclick="window.location.href='users.php?user_type=student'">
                 <div class="stat-card-content text-center">
                     <div class="stat-number"><?php echo $total_students; ?></div>
                     <div class="stat-label">Students</div>
@@ -413,7 +510,7 @@ $feedbacks = $db->query("SELECT f.*, u.full_name, lr.bag_number
             </div>
         </div>
         <div class="col-lg-3 col-md-6 mb-3">
-            <div class="stat-card">
+            <div class="stat-card clickable-tile" onclick="window.location.href='users.php?user_type=staff'">
                 <div class="stat-card-content text-center">
                     <div class="stat-number"><?php echo $total_staff; ?></div>
                     <div class="stat-label">Staff</div>
@@ -421,7 +518,7 @@ $feedbacks = $db->query("SELECT f.*, u.full_name, lr.bag_number
             </div>
         </div>
         <div class="col-lg-3 col-md-6 mb-3">
-            <div class="stat-card">
+            <div class="stat-card clickable-tile" onclick="window.location.href='admin_manage_requests.php'">
                 <div class="stat-card-content text-center">
                     <div class="stat-number"><?php echo $total_requests; ?></div>
                     <div class="stat-label">Total Requests</div>
@@ -429,13 +526,31 @@ $feedbacks = $db->query("SELECT f.*, u.full_name, lr.bag_number
             </div>
         </div>
         <div class="col-lg-3 col-md-6 mb-3">
-            <div class="stat-card">
+            <div class="stat-card clickable-tile" onclick="window.location.href='admin_manage_requests.php?status=delivered'">
                 <div class="stat-card-content text-center">
                     <div class="stat-number"><?php echo $total_delivered; ?></div>
                     <div class="stat-label">Delivered</div>
                 </div>
             </div>
         </div>
+        <?php if ($payment_stats): ?>
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="stat-card clickable-tile" onclick="window.location.href='admin_payments.php'">
+                <div class="stat-card-content text-center">
+                    <div class="stat-number">₹<?php echo number_format($payment_stats['total_collected']/1000, 0); ?>K</div>
+                    <div class="stat-label">Revenue (<?php echo $current_year; ?>)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="stat-card clickable-tile" onclick="window.location.href='admin_payments.php'">
+                <div class="stat-card-content text-center">
+                    <div class="stat-number"><?php echo $payment_stats['payment_rate']; ?>%</div>
+                    <div class="stat-label">Payment Rate</div>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
     </div>
 
     <!-- Student Feedback Section -->
@@ -517,6 +632,7 @@ $feedbacks = $db->query("SELECT f.*, u.full_name, lr.bag_number
             <?php endif; ?>
         </div>
     </div>
+    
     <style>
     .feedback-card {
         animation: fadeInUp 0.8s cubic-bezier(.42,.65,.27,.99);
@@ -535,7 +651,6 @@ $feedbacks = $db->query("SELECT f.*, u.full_name, lr.bag_number
     }
     .text-teal { color: #23d5ab !important; }
     </style>
-    <!-- Add more admin widgets or quick links here -->
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
@@ -547,8 +662,6 @@ function createParticles() {
     for (let i = 0; i < particleCount; i++) {
         const particle = document.createElement('div');
         particle.className = 'particle';
-        particle.style.left = Math.random() * 100 + '%';
-        particle.style.top = Math.random() * 100 + '%';
         particle.style.animationDelay = Math.random() * 6 + 's';
         particle.style.animationDuration = (Math.random() * 3 + 3) + 's';
         particlesContainer.appendChild(particle);
@@ -577,5 +690,6 @@ function addScrollAnimations() {
 }
 addScrollAnimations();
 </script>
+
 </body>
 </html>

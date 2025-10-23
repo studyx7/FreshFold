@@ -26,6 +26,36 @@ class Database {
     }
 }
 
+// Razorpay Configuration
+define('RAZORPAY_KEY_ID', 'rzp_test_RB1vkBgk5LPRlL');
+define('RAZORPAY_KEY_SECRET', '7XkmtPaSZPYnEmCCRIpj7Gem');
+define('RAZORPAY_WEBHOOK_SECRET', ''); // Set this if you implement webhooks
+
+// Helper function to get Razorpay settings from database
+function getRazorpaySettings() {
+    $database = new Database();
+    $db = $database->getConnection();
+    $stmt = $db->prepare("SELECT setting_key, setting_value FROM settings WHERE setting_key LIKE 'razorpay%' OR setting_key = 'annual_fee_amount'");
+    $stmt->execute();
+    $settings = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $settings[$row['setting_key']] = $row['setting_value'];
+    }
+    return $settings;
+}
+
+// Function to log payment activities (optional but recommended)
+function logPaymentActivity($student_id, $activity, $details = null) {
+    $database = new Database();
+    $db = $database->getConnection();
+    try {
+        $stmt = $db->prepare("INSERT INTO payment_logs (student_id, activity, details, created_at) VALUES (?, ?, ?, NOW())");
+        $stmt->execute([$student_id, $activity, json_encode($details)]);
+    } catch (Exception $e) {
+        error_log("Payment log error: " . $e->getMessage());
+    }
+}
+
 // classes/User.php - User management class
 class User {
     private $conn;
@@ -92,6 +122,7 @@ class User {
                 $_SESSION['user_type'] = $row['user_type'];
                 $_SESSION['hostel_block'] = $row['hostel_block'];
                 $_SESSION['room_number'] = $row['room_number'];
+                $_SESSION['email'] = $row['email'];
                 return true;
             }
         }

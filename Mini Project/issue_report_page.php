@@ -423,7 +423,6 @@ $open_issue_id = isset($_GET['open_issue_id']) ? intval($_GET['open_issue_id']) 
             100% { background-color: transparent; }
         }
     </style>
-    <meta http-equiv="refresh" content="30">
 </head>
 <body>
 
@@ -452,6 +451,11 @@ $open_issue_id = isset($_GET['open_issue_id']) ? intval($_GET['open_issue_id']) 
         </a>
         <a class="nav-link active" href="issue_report_page.php">
             <i class="fas fa-exclamation-triangle"></i> Report Issue
+        </a>
+        
+        <!-- Add this link to the sidebar navigation -->
+        <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='payment_tab.php') echo ' active'; ?>" href="payment_tab.php">
+            <i class="fas fa-credit-card"></i> Payment
         </a>
         
         <?php if($_SESSION['user_type'] == 'staff' || $_SESSION['user_type'] == 'admin'): ?>

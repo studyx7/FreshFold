@@ -359,6 +359,7 @@ $feedbacks = $db->query("SELECT f.*, u.full_name, lr.bag_number
         <a class="nav-link" href="profile_page.php">
             <i class="fas fa-user"></i> Profile
         </a>
+        <!-- Payment tab link removed -->
         <hr style="border-color: rgba(255,255,255,0.2); margin: 20px;">
         <a class="nav-link" href="logout.php" onclick="return confirm('Are you sure you want to logout?')">
             <i class="fas fa-sign-out-alt"></i> Logout

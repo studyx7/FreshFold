@@ -664,6 +664,20 @@ $recent_request = !empty($user_requests) ? $user_requests[0] : null;
             <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='issue_report_page.php') echo ' active'; ?>" href="issue_report_page.php">
                 <i class="fas fa-exclamation-triangle"></i> Report Issue
             </a>
+            
+            <?php if($_SESSION['user_type'] == 'staff' || $_SESSION['user_type'] == 'admin'): ?>
+            <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='manage_requests_page.php') echo ' active'; ?>" href="manage_requests_page.php">
+                <i class="fas fa-tasks"></i> Manage Requests
+            </a>
+            <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='users.php') echo ' active'; ?>" href="users.php">
+                <i class="fas fa-users"></i> Users
+            </a>
+            <?php endif; ?>
+            
+            <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='payment_tab.php') echo ' active'; ?>" href="payment_tab.php">
+                <i class="fas fa-credit-card"></i> Payment
+            </a>
+            
             <a class="nav-link<?php if(basename($_SERVER['PHP_SELF'])=='profile_page.php') echo ' active'; ?>" href="profile_page.php">
                 <i class="fas fa-user"></i> Profile
             </a>
