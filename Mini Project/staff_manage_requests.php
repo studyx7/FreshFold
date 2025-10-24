@@ -347,10 +347,7 @@ $status_options = [
                         </td>
                         <td>
                             <button class="btn btn-sm btn-primary" onclick="updateStatus(<?php echo $request['request_id']; ?>, '<?php echo $request['status']; ?>', '<?php echo htmlspecialchars($request['bag_number']); ?>')">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button class="btn btn-sm btn-info" onclick="viewDetails(<?php echo $request['request_id']; ?>)">
-                                <i class="fas fa-eye"></i>
+                                <i class="fas fa-edit"></i> Update
                             </button>
                         </td>
                     </tr>
@@ -494,9 +491,7 @@ function animateCard(card) {
 }
 
 function updateStatus(requestId, currentStatus, bagNumber) {
-    // Fetch the current return date and pickup date for the request (AJAX or from table row data)
-    // For simplicity, pass them as data attributes in the button or fetch via AJAX if needed.
-    // Here, let's assume you have them in JS variables or can fetch via AJAX:
+    // Fetch the current return date and pickup date for the request
     let row = document.querySelector('tr[data-request-id="' + requestId + '"]');
     let returnDate = row ? row.getAttribute('data-return-date') : '';
     let pickupDate = row ? row.getAttribute('data-pickup-date') : '';
@@ -515,11 +510,6 @@ function updateStatus(requestId, currentStatus, bagNumber) {
     modal.show();
 }
 
-function viewDetails(requestId) {
-    // This can be expanded to show a detailed view modal
-    alert('View details functionality can be implemented here for request #' + requestId);
-}
-
 // Auto-open the update status modal if open_request_id is set
 <?php if ($open_request_id): ?>
 document.addEventListener('DOMContentLoaded', function() {
@@ -528,9 +518,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var requestId = row.getAttribute('data-request-id');
         var currentStatus = row.querySelector('.status-badge').textContent.trim().toLowerCase();
         var bagNumber = row.children[1].textContent.trim();
-        // Use the same updateStatus function as in your code
         updateStatus(requestId, currentStatus, bagNumber);
-        // Optionally, scroll to the row
         row.scrollIntoView({behavior: "smooth", block: "center"});
         row.classList.add('table-primary');
         setTimeout(() => row.classList.remove('table-primary'), 2000);
